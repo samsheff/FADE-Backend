@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Market {
+  id           String   @id
+  question     String
+  outcomes     Json     // Array of outcome names (e.g., ["Yes", "No"])
+  expiryDate   DateTime
+  liquidity    Decimal
+  volume24h    Decimal
+  categoryTag  String?
+  marketSlug   String
+  active       Boolean  @default(true)
+  tokens       Json     // JSON object: { "YES": "0x...", "NO": "0x..." }
+  createdAt    DateTime @default(now())
+  lastUpdated  DateTime @updatedAt
+
+  trades    Trade[]
+  positions Position[]
+
+  @@index([active])
+  @@index([categoryTag])
+  @@index([expiryDate])
+  @@map("markets")
+}
+
+model Trade {
+  id            String    @id @default(uuid())
+  walletAddress String
+  marketId      String
+  outcome       String    // "YES" or "NO"
+  side          String    // "buy" or "sell"
+  price         Decimal
+  size          Decimal
+  txHash        String?
+  blockNumber   BigInt?
+  gasUsed       BigInt?
+  fee           Decimal?
+  timestamp     DateTime  @default(now())
+  confirmedAt   DateTime?
+
+  market Market @relation(fields: [marketId], references: [id])
+
+  @@index([walletAddress])
+  @@index([marketId])
+  @@index([timestamp])
+  @@map("trades")
+}
+
+model Position {
+  id            String   @id @default(uuid())
+  walletAddress String
+  marketId      String
+  outcome       String   // "YES" or "NO"
+  avgPrice      Decimal
+  size          Decimal
+  realizedPnl   Decimal  @default(0)
+  unrealizedPnl Decimal  @default(0)
+  lastTradeAt   DateTime
+  updatedAt     DateTime @updatedAt
+
+  market Market @relation(fields: [marketId], references: [id])
+
+  @@unique([walletAddress, marketId, outcome])
+  @@index([walletAddress])
+  @@index([marketId])
+  @@map("positions")
+}
+
+model OrderbookSnapshot {
+  id        String   @id @default(uuid())
+  marketId  String
+  outcome   String   // "YES" or "NO"
+  bids      Json     // Array of {price, size}
+  asks      Json     // Array of {price, size}
+  timestamp DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([marketId, outcome])
+  @@index([expiresAt])
+  @@map("orderbook_snapshots")
+}

@@ -1,5 +1,5 @@
 import { PrismaClient, Market as PrismaMarket } from '@prisma/client';
-import { Market, MarketFilters } from '../../../types/market.types.js';
+import { MarketFilters, MarketRecord } from '../../../types/market.types.js';
 import { getPrismaClient } from '../client.js';
 
 export class MarketRepository {
@@ -9,7 +9,7 @@ export class MarketRepository {
     this.prisma = getPrismaClient();
   }
 
-  async findById(id: string): Promise<Market | null> {
+  async findById(id: string): Promise<MarketRecord | null> {
     const market = await this.prisma.market.findUnique({
       where: { id },
     });
@@ -17,7 +17,7 @@ export class MarketRepository {
     return market ? this.toModel(market) : null;
   }
 
-  async findMany(filters: MarketFilters): Promise<{ markets: Market[]; total: number }> {
+  async findMany(filters: MarketFilters): Promise<{ markets: MarketRecord[]; total: number }> {
     const where = {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.category && { categoryTag: filters.category }),
@@ -39,7 +39,14 @@ export class MarketRepository {
     };
   }
 
-  async create(market: Omit<Market, 'createdAt' | 'lastUpdated'>): Promise<Market> {
+  async findAll(): Promise<MarketRecord[]> {
+    const markets = await this.prisma.market.findMany({
+      orderBy: { lastUpdated: 'desc' },
+    });
+    return markets.map((m) => this.toModel(m));
+  }
+
+  async create(market: Omit<MarketRecord, 'createdAt' | 'lastUpdated'>): Promise<MarketRecord> {
     const created = await this.prisma.market.create({
       data: {
         id: market.id,
@@ -52,6 +59,11 @@ export class MarketRepository {
         marketSlug: market.marketSlug,
         active: market.active,
         tokens: market.tokens,
+        polymarketMarketId: market.polymarketMarketId,
+        yesPrice: market.yesPrice,
+        noPrice: market.noPrice,
+        volume: market.volume,
+        lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
       },
     });
 
@@ -60,17 +72,20 @@ export class MarketRepository {
 
   async update(
     id: string,
-    data: Partial<Omit<Market, 'id' | 'createdAt' | 'lastUpdated'>>,
-  ): Promise<Market> {
+    data: Partial<Omit<MarketRecord, 'id' | 'createdAt' | 'lastUpdated'>>,
+  ): Promise<MarketRecord> {
     const updated = await this.prisma.market.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        lastIndexedBlock: data.lastIndexedBlock ? BigInt(data.lastIndexedBlock) : undefined,
+      },
     });
 
     return this.toModel(updated);
   }
 
-  async upsert(market: Omit<Market, 'createdAt' | 'lastUpdated'>): Promise<Market> {
+  async upsert(market: Omit<MarketRecord, 'createdAt' | 'lastUpdated'>): Promise<MarketRecord> {
     const upserted = await this.prisma.market.upsert({
       where: { id: market.id },
       create: {
@@ -84,6 +99,11 @@ export class MarketRepository {
         marketSlug: market.marketSlug,
         active: market.active,
         tokens: market.tokens,
+        polymarketMarketId: market.polymarketMarketId,
+        yesPrice: market.yesPrice,
+        noPrice: market.noPrice,
+        volume: market.volume,
+        lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
       },
       update: {
         question: market.question,
@@ -95,13 +115,18 @@ export class MarketRepository {
         marketSlug: market.marketSlug,
         active: market.active,
         tokens: market.tokens,
+        polymarketMarketId: market.polymarketMarketId,
+        yesPrice: market.yesPrice,
+        noPrice: market.noPrice,
+        volume: market.volume,
+        lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
       },
     });
 
     return this.toModel(upserted);
   }
 
-  private toModel(prismaMarket: PrismaMarket): Market {
+  private toModel(prismaMarket: PrismaMarket): MarketRecord {
     return {
       id: prismaMarket.id,
       question: prismaMarket.question,
@@ -113,6 +138,13 @@ export class MarketRepository {
       marketSlug: prismaMarket.marketSlug,
       active: prismaMarket.active,
       tokens: prismaMarket.tokens as Record<string, string>,
+      polymarketMarketId: prismaMarket.polymarketMarketId,
+      yesPrice: prismaMarket.yesPrice ? prismaMarket.yesPrice.toString() : null,
+      noPrice: prismaMarket.noPrice ? prismaMarket.noPrice.toString() : null,
+      volume: prismaMarket.volume ? prismaMarket.volume.toString() : null,
+      lastIndexedBlock: prismaMarket.lastIndexedBlock
+        ? prismaMarket.lastIndexedBlock.toString()
+        : null,
       createdAt: prismaMarket.createdAt,
       lastUpdated: prismaMarket.lastUpdated,
     };

@@ -4,7 +4,7 @@ Deterministic, institutional-grade backend for a Polymarket prediction market tr
 
 ## Features
 
-- **Market Data**: Fetch and cache Polymarket markets and orderbooks
+- **Market Data**: Index and cache on-chain Polymarket market data
 - **Trade Preparation**: Build unsigned transactions for trades (never handles private keys)
 - **Position Tracking**: Calculate positions and P&L from trade history
 - **EIP-712 Authentication**: Wallet-based authentication using signed messages
@@ -57,7 +57,10 @@ cp .env.example .env
 Key variables:
 - `DATABASE_URL`: Database connection string
 - `POLYGON_RPC_URL`: Polygon RPC endpoint
-- `POLYMARKET_CLOB_API_URL`: Polymarket CLOB API URL
+- `POLYMARKET_NETWORK`: Polymarket network (mainnet/testnet/fork)
+- `POLYMARKET_RPC_URL`: Optional override RPC for the indexer
+- `POLYMARKET_MARKET_REGISTRY_ADDRESS`: Optional on-chain registry override
+- `POLYMARKET_MARKET_STATE_ADDRESS`: Optional on-chain state contract override
 - `PORT`: Server port (default: 3000)
 
 ### Running the Server
@@ -146,7 +149,7 @@ Returns an unsigned transaction ready for wallet signing.
 ## Database Schema
 
 ### Market
-- Market data from Polymarket CLOB
+- Market data indexed from Polymarket on-chain sources
 - Cached locally with periodic sync
 
 ### Trade
@@ -166,8 +169,12 @@ Returns an unsigned transaction ready for wallet signing.
 
 ### Market Sync Job
 - **Frequency**: Every 60 seconds
-- **Task**: Fetch latest market data from Polymarket CLOB API
+- **Task**: Fetch latest market data from Polymarket on-chain sources
 - **Updates**: Liquidity, volume, prices, active status
+
+## Indexer Notes
+
+See `docs/polymarket-indexer.md` for indexing flow, cache invalidation, and known limitations.
 
 ### Position Update Job
 - **Frequency**: Every 5 minutes
@@ -216,7 +223,7 @@ back/
 │   │   └── position-tracking/ # Position tracking service
 │   ├── adapters/            # External integrations
 │   │   ├── blockchain/      # viem adapter for Polygon
-│   │   ├── polymarket/      # Polymarket CLOB API client
+│   │   ├── polymarket/      # Polymarket on-chain adapter
 │   │   └── database/        # Prisma repositories
 │   ├── middleware/          # Auth, validation, logging
 │   ├── utils/               # Logger, errors, validators

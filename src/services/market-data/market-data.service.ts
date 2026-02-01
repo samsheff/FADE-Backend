@@ -1,19 +1,25 @@
 import { MarketRepository } from '../../adapters/database/repositories/market.repository.js';
-import { PolymarketClobAdapter } from '../../adapters/polymarket/clob-client.adapter.js';
+import { OrderbookRepository } from '../../adapters/database/repositories/orderbook.repository.js';
 import { MarketCacheService } from './market-cache.service.js';
-import { Market, MarketFilters, MarketListResponse, Orderbook } from '../../types/market.types.js';
+import {
+  Market,
+  MarketFilters,
+  MarketListResponse,
+  MarketRecord,
+  Orderbook,
+} from '../../types/market.types.js';
 import { NotFoundError } from '../../utils/errors.js';
 import { getLogger } from '../../utils/logger.js';
 
 export class MarketDataService {
   private marketRepo: MarketRepository;
-  private polymarketAdapter: PolymarketClobAdapter;
+  private orderbookRepo: OrderbookRepository;
   private cache: MarketCacheService;
   private logger;
 
   constructor() {
     this.marketRepo = new MarketRepository();
-    this.polymarketAdapter = new PolymarketClobAdapter();
+    this.orderbookRepo = new OrderbookRepository();
     this.cache = new MarketCacheService();
     this.logger = getLogger();
   }
@@ -23,13 +29,14 @@ export class MarketDataService {
 
     // Fetch from database
     const result = await this.marketRepo.findMany(filters);
+    const markets = result.markets.map((market) => this.toPublicMarket(market));
 
     // Cache individual markets
-    result.markets.forEach((market) => {
+    markets.forEach((market) => {
       this.cache.setMarket(market.id, market);
     });
 
-    return result;
+    return { markets, total: result.total };
   }
 
   async getMarketById(id: string): Promise<Market> {
@@ -43,10 +50,12 @@ export class MarketDataService {
     }
 
     // Fetch from database
-    const market = await this.marketRepo.findById(id);
-    if (!market) {
+    const record = await this.marketRepo.findById(id);
+    if (!record) {
       throw new NotFoundError('Market', id);
     }
+
+    const market = this.toPublicMarket(record);
 
     // Cache it
     this.cache.setMarket(id, market);
@@ -65,15 +74,24 @@ export class MarketDataService {
       return cached;
     }
 
-    // Get market to find token ID
-    const market = await this.getMarketById(marketId);
-    const tokenId = market.tokens[outcome];
-    if (!tokenId) {
-      throw new NotFoundError(`Token for outcome ${outcome} in market`, marketId);
+    const snapshot = await this.orderbookRepo.findFreshSnapshot(
+      marketId,
+      outcome,
+      new Date(),
+    );
+
+    if (snapshot) {
+      const orderbook = { bids: snapshot.bids, asks: snapshot.asks };
+      this.cache.setOrderbook(cacheKey, orderbook);
+      return orderbook;
     }
 
-    // Fetch from Polymarket
-    const orderbook = await this.polymarketAdapter.fetchOrderbook(tokenId);
+    const record = await this.marketRepo.findById(marketId);
+    if (!record) {
+      throw new NotFoundError('Market', marketId);
+    }
+
+    const orderbook = this.buildSyntheticOrderbook(record, outcome);
 
     // Cache it
     this.cache.setOrderbook(cacheKey, orderbook);
@@ -81,31 +99,35 @@ export class MarketDataService {
     return orderbook;
   }
 
-  async syncMarketsFromPolymarket(): Promise<number> {
-    this.logger.info('Starting market sync from Polymarket');
+  private toPublicMarket(record: MarketRecord): Market {
+    return {
+      id: record.id,
+      question: record.question,
+      outcomes: record.outcomes,
+      expiryDate: record.expiryDate,
+      liquidity: record.liquidity,
+      volume24h: record.volume24h,
+      categoryTag: record.categoryTag,
+      marketSlug: record.marketSlug,
+      active: record.active,
+      tokens: record.tokens,
+      createdAt: record.createdAt,
+      lastUpdated: record.lastUpdated,
+    };
+  }
 
-    try {
-      // Fetch latest markets from Polymarket
-      const markets = await this.polymarketAdapter.fetchMarkets({
-        active: true,
-        limit: 100,
-      });
-
-      this.logger.info({ count: markets.length }, 'Fetched markets from Polymarket');
-
-      // Upsert into database
-      let updated = 0;
-      for (const market of markets) {
-        await this.marketRepo.upsert(market);
-        this.cache.deleteMarket(market.id); // Invalidate cache
-        updated++;
-      }
-
-      this.logger.info({ updated }, 'Market sync completed');
-      return updated;
-    } catch (error) {
-      this.logger.error({ error }, 'Market sync failed');
-      throw error;
+  private buildSyntheticOrderbook(record: MarketRecord, outcome: string): Orderbook {
+    const price =
+      outcome.toUpperCase() === 'YES' ? record.yesPrice : record.noPrice;
+    if (!price) {
+      return { bids: [], asks: [] };
     }
+
+    const size = record.liquidity || '0';
+
+    return {
+      bids: [{ price, size }],
+      asks: [{ price, size }],
+    };
   }
 }

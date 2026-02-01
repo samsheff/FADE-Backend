@@ -13,6 +13,14 @@ export interface Market {
   lastUpdated: Date;
 }
 
+export interface MarketRecord extends Market {
+  polymarketMarketId: string | null;
+  yesPrice: string | null;
+  noPrice: string | null;
+  volume: string | null;
+  lastIndexedBlock: string | null;
+}
+
 export interface OrderbookLevel {
   price: string;
   size: string;

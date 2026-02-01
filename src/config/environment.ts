@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+const optionalUrl = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
+const optionalAddress = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+);
+
 const envSchema = z.object({
   // Server Configuration
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -15,6 +27,12 @@ const envSchema = z.object({
 
   // Polymarket CLOB API
   POLYMARKET_CLOB_API_URL: z.string().url().default('https://clob.polymarket.com'),
+
+  // Polymarket Indexer
+  POLYMARKET_NETWORK: z.enum(['mainnet', 'testnet', 'fork']).default('mainnet'),
+  POLYMARKET_RPC_URL: optionalUrl,
+  POLYMARKET_MARKET_REGISTRY_ADDRESS: optionalAddress,
+  POLYMARKET_MARKET_STATE_ADDRESS: optionalAddress,
 
   // Contract Addresses (Polygon Mainnet)
   CTF_EXCHANGE_ADDRESS: z
@@ -40,6 +58,11 @@ const envSchema = z.object({
   // Caching
   MARKET_CACHE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('60000'),
   ORDERBOOK_CACHE_TTL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('30000'),
+  ORDERBOOK_SNAPSHOT_TTL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())

@@ -11,18 +11,23 @@ datasource db {
 }
 
 model Market {
-  id           String   @id
-  question     String
-  outcomes     Json     // Array of outcome names (e.g., ["Yes", "No"])
-  expiryDate   DateTime
-  liquidity    Decimal
-  volume24h    Decimal
-  categoryTag  String?
-  marketSlug   String
-  active       Boolean  @default(true)
-  tokens       Json     // JSON object: { "YES": "0x...", "NO": "0x..." }
-  createdAt    DateTime @default(now())
-  lastUpdated  DateTime @updatedAt
+  id                 String   @id
+  question           String
+  outcomes           Json     // Array of outcome names (e.g., ["Yes", "No"])
+  expiryDate         DateTime
+  liquidity          Decimal
+  volume24h          Decimal
+  categoryTag        String?
+  marketSlug         String
+  active             Boolean  @default(true)
+  tokens             Json     // JSON object: { "YES": "0x...", "NO": "0x..." }
+  polymarketMarketId String?  @map("polymarket_market_id")
+  yesPrice           Decimal? @map("yes_price")
+  noPrice            Decimal? @map("no_price")
+  volume             Decimal? @map("volume")
+  lastIndexedBlock   BigInt?  @map("last_indexed_block")
+  createdAt          DateTime @default(now())
+  lastUpdated        DateTime @updatedAt @map("last_updated")
 
   trades    Trade[]
   positions Position[]
@@ -30,6 +35,7 @@ model Market {
   @@index([active])
   @@index([categoryTag])
   @@index([expiryDate])
+  @@index([polymarketMarketId])
   @@map("markets")
 }
 

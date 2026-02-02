@@ -50,13 +50,21 @@ async function start(): Promise<void> {
     const streamService = new MarketDataStreamService(pubsub);
     const realtimeGateway = new MarketRealtimeGateway(app, pubsub, marketDataService);
 
-    // Start market sync job (waits for initial full sync to complete)
-    logger.info('🔄 Running initial market sync...');
-    await marketSyncJob.start();
-    logger.info('✅ Initial market sync completed');
+    // Start WebSocket stream immediately (subscribes to existing markets)
+    logger.info('🔌 Starting WebSocket stream...');
+    await streamService.start();
+    logger.info('✅ WebSocket stream started');
+
+    // Pass streamService to marketSyncJob so it can subscribe to new markets
+    marketSyncJob.setStreamService(streamService);
+
+    // Start market sync job in background (don't wait)
+    logger.info('🔄 Starting market sync job in background...');
+    marketSyncJob.start().catch((error) => {
+      logger.error({ error }, 'Market sync job failed');
+    });
 
     positionUpdateJob.start();
-    await streamService.start();
     logger.info('✅ Background jobs started');
 
     // Graceful shutdown

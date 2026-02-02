@@ -26,6 +26,7 @@ model Market {
   noPrice            Decimal? @map("no_price")
   volume             Decimal? @map("volume")
   lastIndexedBlock   BigInt?  @map("last_indexed_block")
+  completedEarly     Boolean  @default(false) @map("completed_early")
   createdAt          DateTime @default(now())
   lastUpdated        DateTime @updatedAt @map("last_updated")
 

@@ -177,12 +177,29 @@ export class PolymarketAdapter {
   }
 
   private toMarket(data: PolymarketGammaMarketResponse): PolymarketMarket {
-    const outcomes = this.normalizeStringArray(data.outcomes);
+    const rawOutcomes = this.normalizeStringArray(data.outcomes);
     const tokenIds = this.normalizeStringArray(data.clobTokenIds);
+
+    // Normalize outcomes to uppercase for consistency (YES/NO instead of Yes/No)
+    const outcomes = rawOutcomes.map((o) => o.toUpperCase());
     const tokens: Record<string, string> = {};
     outcomes.forEach((outcome, index) => {
       tokens[outcome] = tokenIds[index] || '';
     });
+
+    // Debug log for first few markets to see what we're getting
+    if (tokenIds.length === 0 && outcomes.length > 0) {
+      this.logger.warn(
+        {
+          conditionId: data.conditionId?.slice(0, 8),
+          question: data.question?.slice(0, 50),
+          hasClobTokenIds: !!data.clobTokenIds,
+          clobTokenIdsType: typeof data.clobTokenIds,
+          clobTokenIdsValue: data.clobTokenIds,
+        },
+        'Market missing CLOB token IDs',
+      );
+    }
 
     const expiryDateRaw =
       data.endDate || data.end_date_iso || data.endDateIso || data.end_date || undefined;

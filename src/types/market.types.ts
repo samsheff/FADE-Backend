@@ -11,6 +11,7 @@ export interface Market {
   tokens: Record<string, string>; // outcome -> token address
   yesPrice: string | null;
   noPrice: string | null;
+  completedEarly: boolean;
   createdAt: Date;
   lastUpdated: Date;
 }
@@ -19,6 +20,7 @@ export interface MarketRecord extends Market {
   polymarketMarketId: string | null;
   volume: string | null;
   lastIndexedBlock: string | null;
+  imageUrl?: string | null;
 }
 
 export interface OrderbookLevel {

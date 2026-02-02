@@ -5,6 +5,7 @@ import { MarketCacheService } from './market-cache.service.js';
 import { MarketRecord, Orderbook } from '../../types/market.types.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
+import type { MarketDataStreamService } from './market-data-stream.service.js';
 
 interface SyncResult {
   marketsProcessed: number;
@@ -22,6 +23,7 @@ export class PolymarketIndexer {
   private logger;
   private readonly syncConcurrency = 2;
   private readonly batchDelayMs = 1000;
+  private streamService: MarketDataStreamService | null = null;
 
   constructor() {
     this.adapter = new PolymarketAdapter();
@@ -30,6 +32,10 @@ export class PolymarketIndexer {
     this.cache = new MarketCacheService();
     this.logger = getLogger();
     this.env = getEnvironment();
+  }
+
+  setStreamService(streamService: MarketDataStreamService): void {
+    this.streamService = streamService;
   }
 
   async fullSync(): Promise<SyncResult> {
@@ -164,15 +170,28 @@ export class PolymarketIndexer {
       const batch = items.slice(i, i + this.syncConcurrency);
       const batchNum = Math.floor(i / this.syncConcurrency) + 1;
 
-      // Log progress every 10 batches or on first/last batch
-      if (batchNum === 1 || batchNum === totalBatches || batchNum % 10 === 0) {
+      // Log progress every 5 batches or on first/last batch
+      if (batchNum === 1 || batchNum === totalBatches || batchNum % 5 === 0) {
+        const processed = Math.min(i + this.syncConcurrency, items.length);
         this.logger.info(
-          { batch: batchNum, total: totalBatches, progress: `${Math.round((batchNum / totalBatches) * 100)}%` },
-          'Processing batch',
+          {
+            batch: batchNum,
+            total: totalBatches,
+            processed,
+            totalItems: items.length,
+            progress: `${Math.round((processed / items.length) * 100)}%`,
+          },
+          'Processing market batch',
         );
       }
 
       await Promise.all(batch.map((item) => handler(item)));
+
+      // Subscribe to newly indexed markets immediately
+      if (this.streamService) {
+        await this.streamService.refreshSubscriptions();
+      }
+
       if (this.batchDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, this.batchDelayMs));
       }

@@ -47,12 +47,20 @@ export class MarketDataStreamService {
       });
     });
     this.wsClient.connect();
+
+    // Subscribe to existing markets immediately
     await this.subscribeToActiveMarkets();
+
+    // Periodic refresh (less frequent since we subscribe progressively)
     this.refreshTimer = setInterval(() => {
       this.subscribeToActiveMarkets().catch((error) => {
         this.logger.error({ error }, 'Failed refreshing market subscriptions');
       });
     }, getEnvironment().MARKET_SYNC_INTERVAL_MS);
+  }
+
+  async refreshSubscriptions(): Promise<void> {
+    await this.subscribeToActiveMarkets();
   }
 
   stop(): void {
@@ -67,12 +75,17 @@ export class MarketDataStreamService {
     const markets = await this.marketRepo.findAll();
     const activeMarkets = markets.filter((market) => market.active);
 
+    let subscriptionCount = 0;
+    let marketsWithoutTokens = 0;
+
     for (const market of activeMarkets) {
+      let hasAnyToken = false;
       for (const outcome of ['YES', 'NO'] as const) {
         const tokenId = market.tokens[outcome];
         if (!tokenId) {
           continue;
         }
+        hasAnyToken = true;
         const key = this.orderbookKey(market.id, outcome);
         if (!this.subscriptionKeys.has(key)) {
           await this.seedOrderbook(market.id, outcome, tokenId);
@@ -82,13 +95,45 @@ export class MarketDataStreamService {
             tokenId,
           });
           this.subscriptionKeys.add(key);
+          subscriptionCount++;
+        }
+      }
+
+      if (!hasAnyToken) {
+        marketsWithoutTokens++;
+        if (marketsWithoutTokens <= 3) {
+          this.logger.warn(
+            {
+              marketId: market.id.slice(0, 8),
+              question: market.question.slice(0, 50),
+              tokens: market.tokens,
+            },
+            'Market has no token IDs, skipping WebSocket subscription',
+          );
         }
       }
     }
-    this.logger.info(
-      { markets: activeMarkets.length },
-      'Subscribed to Polymarket CLOB WebSocket',
-    );
+
+    if (subscriptionCount > 0) {
+      this.logger.info(
+        {
+          totalMarkets: activeMarkets.length,
+          newSubscriptions: subscriptionCount,
+          totalSubscriptions: this.subscriptionKeys.size,
+          skipped: marketsWithoutTokens,
+        },
+        'WebSocket subscriptions updated',
+      );
+    } else if (marketsWithoutTokens > 0) {
+      this.logger.debug(
+        {
+          totalMarkets: activeMarkets.length,
+          totalSubscriptions: this.subscriptionKeys.size,
+          skipped: marketsWithoutTokens,
+        },
+        'No new markets to subscribe to',
+      );
+    }
   }
 
   private async seedOrderbook(

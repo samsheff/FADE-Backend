@@ -104,6 +104,13 @@ export class PolymarketCLOBWebSocketClient {
   }
 
   private handleRawMessage(payload: string): void {
+    // Ignore known server response messages
+    const knownResponses = ['NO NEW ASSETS', 'INVALID OPERATION', 'SUBSCRIBED', 'UNSUBSCRIBED'];
+    if (knownResponses.includes(payload)) {
+      this.logger.debug({ payload }, 'WebSocket server response');
+      return;
+    }
+
     let message: unknown;
     try {
       message = JSON.parse(payload);
@@ -374,7 +381,7 @@ export class PolymarketCLOBWebSocketClient {
       return;
     }
     const payload = {
-      type: 'market',
+      operation: 'subscribe',
       assets_ids: [subscription.tokenId],
     };
     this.ws.send(JSON.stringify(payload));

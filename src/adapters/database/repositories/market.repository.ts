@@ -18,10 +18,26 @@ export class MarketRepository {
   }
 
   async findMany(filters: MarketFilters): Promise<{ markets: MarketRecord[]; total: number }> {
-    const where = {
+    const where: Prisma.MarketWhereInput = {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.category && { categoryTag: filters.category }),
       ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
+      // Exclude resolved/closed markets
+      NOT: [
+        // Exclude markets that completed early with zero prices
+        {
+          AND: [
+            { completedEarly: true },
+            { yesPrice: 0 },
+            { noPrice: 0 },
+          ],
+        },
+        // Exclude markets with extreme prices (0 or 100 cents = resolved)
+        { yesPrice: 0 },
+        { yesPrice: 100 },
+        { noPrice: 0 },
+        { noPrice: 100 },
+      ],
     };
 
     const [markets, total] = await Promise.all([
@@ -60,6 +76,14 @@ export class MarketRepository {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
       ...(searchConditions.length > 0 && { OR: searchConditions }),
+      // Exclude markets that completed early with zero prices
+      NOT: {
+        AND: [
+          { completedEarly: true },
+          { yesPrice: 0 },
+          { noPrice: 0 },
+        ],
+      },
     };
 
     const [markets, total] = await Promise.all([
@@ -107,6 +131,7 @@ export class MarketRepository {
         noPrice: market.noPrice,
         volume: market.volume,
         lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
+        completedEarly: market.completedEarly,
       },
     });
 
@@ -147,6 +172,7 @@ export class MarketRepository {
         noPrice: market.noPrice,
         volume: market.volume,
         lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
+        completedEarly: market.completedEarly,
       },
       update: {
         question: market.question,
@@ -163,6 +189,7 @@ export class MarketRepository {
         noPrice: market.noPrice,
         volume: market.volume,
         lastIndexedBlock: market.lastIndexedBlock ? BigInt(market.lastIndexedBlock) : null,
+        completedEarly: market.completedEarly,
       },
     });
 
@@ -188,8 +215,10 @@ export class MarketRepository {
       lastIndexedBlock: prismaMarket.lastIndexedBlock
         ? prismaMarket.lastIndexedBlock.toString()
         : null,
+      completedEarly: prismaMarket.completedEarly,
       createdAt: prismaMarket.createdAt,
       lastUpdated: prismaMarket.lastUpdated,
+      imageUrl: null, // TODO: Fetch from Polymarket when available
     };
   }
 }

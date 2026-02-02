@@ -12,15 +12,15 @@ export class MarketSyncJob {
     this.logger = getLogger();
   }
 
-  start(): void {
+  async start(): Promise<void> {
     const env = getEnvironment();
     this.logger.info(
       { intervalMs: env.MARKET_SYNC_INTERVAL_MS },
       'Starting market sync job',
     );
 
-    // Run immediately on start with a full sync
-    this.run('full');
+    // Run immediately on start with a full sync and WAIT for it to complete
+    await this.run('full');
 
     // Then run at intervals
     this.intervalId = setInterval(() => {

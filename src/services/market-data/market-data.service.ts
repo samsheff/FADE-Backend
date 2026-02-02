@@ -1,26 +1,34 @@
 import { MarketRepository } from '../../adapters/database/repositories/market.repository.js';
 import { OrderbookRepository } from '../../adapters/database/repositories/orderbook.repository.js';
+import { PolymarketClobAdapter } from '../../adapters/polymarket/clob-client.adapter.js';
 import { MarketCacheService } from './market-cache.service.js';
 import {
   Market,
   MarketFilters,
   MarketListResponse,
   MarketRecord,
+  MarketSearchFilters,
   Orderbook,
 } from '../../types/market.types.js';
-import { NotFoundError } from '../../utils/errors.js';
+import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { getLogger } from '../../utils/logger.js';
+import { getEnvironment } from '../../config/environment.js';
+import { aggregateOrderbookDepth } from '../../utils/orderbook-aggregator.js';
 
 export class MarketDataService {
   private marketRepo: MarketRepository;
   private orderbookRepo: OrderbookRepository;
   private cache: MarketCacheService;
+  private clobAdapter: PolymarketClobAdapter;
+  private env;
   private logger;
 
   constructor() {
     this.marketRepo = new MarketRepository();
     this.orderbookRepo = new OrderbookRepository();
     this.cache = new MarketCacheService();
+    this.clobAdapter = new PolymarketClobAdapter();
+    this.env = getEnvironment();
     this.logger = getLogger();
   }
 
@@ -32,6 +40,36 @@ export class MarketDataService {
     const markets = result.markets.map((market) => this.toPublicMarket(market));
 
     // Cache individual markets
+    markets.forEach((market) => {
+      this.cache.setMarket(market.id, market);
+    });
+
+    return { markets, total: result.total };
+  }
+
+  async searchMarkets(filters: MarketSearchFilters): Promise<MarketListResponse> {
+    const trimmedQuery = filters.query.trim();
+    if (!trimmedQuery) {
+      return this.getMarkets({
+        active: filters.active,
+        expiresAfter: filters.expiresAfter,
+        limit: filters.limit,
+        offset: filters.offset,
+      });
+    }
+
+    this.logger.debug({ filters }, 'Searching markets');
+
+    const result = await this.marketRepo.searchMarkets({
+      query: trimmedQuery,
+      limit: filters.limit,
+      offset: filters.offset,
+      active: filters.active,
+      expiresAfter: filters.expiresAfter,
+    });
+
+    const markets = result.markets.map((market) => this.toPublicMarket(market));
+
     markets.forEach((market) => {
       this.cache.setMarket(market.id, market);
     });
@@ -63,7 +101,11 @@ export class MarketDataService {
     return market;
   }
 
-  async getOrderbook(marketId: string, outcome: string): Promise<Orderbook> {
+  async getOrderbook(
+    marketId: string,
+    outcome: string,
+    options?: { aggregate?: boolean; bucketSize?: number },
+  ): Promise<Orderbook> {
     this.logger.debug({ marketId, outcome }, 'Getting orderbook');
 
     // Check cache first
@@ -71,7 +113,7 @@ export class MarketDataService {
     const cached = this.cache.getOrderbook(cacheKey);
     if (cached) {
       this.logger.debug({ marketId, outcome }, 'Orderbook found in cache');
-      return cached;
+      return this.applyAggregation(cached, options);
     }
 
     const snapshot = await this.orderbookRepo.findFreshSnapshot(
@@ -83,7 +125,7 @@ export class MarketDataService {
     if (snapshot) {
       const orderbook = { bids: snapshot.bids, asks: snapshot.asks };
       this.cache.setOrderbook(cacheKey, orderbook);
-      return orderbook;
+      return this.applyAggregation(orderbook, options);
     }
 
     const record = await this.marketRepo.findById(marketId);
@@ -91,12 +133,55 @@ export class MarketDataService {
       throw new NotFoundError('Market', marketId);
     }
 
-    const orderbook = this.buildSyntheticOrderbook(record, outcome);
+    const tokenId = record.tokens[outcome];
+    if (!tokenId) {
+      if (this.env.NODE_ENV !== 'production') {
+        const orderbook = this.buildSyntheticOrderbook(record, outcome);
+        this.cache.setOrderbook(cacheKey, orderbook);
+        return this.applyAggregation(orderbook, options);
+      }
+      throw new ValidationError(`Token ID not found for outcome ${outcome}`);
+    }
 
-    // Cache it
-    this.cache.setOrderbook(cacheKey, orderbook);
+    try {
+      const orderbook = await this.clobAdapter.fetchOrderbook(tokenId);
 
-    return orderbook;
+      const expiresAt = new Date(Date.now() + this.env.ORDERBOOK_SNAPSHOT_TTL_MS);
+      await this.orderbookRepo.upsertSnapshot({
+        marketId,
+        outcome,
+        bids: orderbook.bids,
+        asks: orderbook.asks,
+        expiresAt,
+      });
+
+      this.cache.setOrderbook(cacheKey, orderbook);
+      return this.applyAggregation(orderbook, options);
+    } catch (error) {
+      this.logger.error({ error, marketId, outcome }, 'Failed to fetch orderbook from CLOB');
+
+      if (this.env.NODE_ENV !== 'production') {
+        const orderbook = this.buildSyntheticOrderbook(record, outcome);
+        this.cache.setOrderbook(cacheKey, orderbook);
+        return this.applyAggregation(orderbook, options);
+      }
+
+      throw error;
+    }
+  }
+
+  private applyAggregation(
+    orderbook: Orderbook,
+    options?: { aggregate?: boolean; bucketSize?: number },
+  ): Orderbook {
+    if (!options?.aggregate) {
+      return orderbook;
+    }
+
+    return {
+      bids: aggregateOrderbookDepth(orderbook.bids, options.bucketSize),
+      asks: aggregateOrderbookDepth(orderbook.asks, options.bucketSize),
+    };
   }
 
   private toPublicMarket(record: MarketRecord): Market {
@@ -111,6 +196,8 @@ export class MarketDataService {
       marketSlug: record.marketSlug,
       active: record.active,
       tokens: record.tokens,
+      yesPrice: record.yesPrice ?? null,
+      noPrice: record.noPrice ?? null,
       createdAt: record.createdAt,
       lastUpdated: record.lastUpdated,
     };

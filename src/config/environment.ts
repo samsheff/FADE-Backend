@@ -12,6 +12,11 @@ const optionalAddress = z.preprocess(
     .optional(),
 );
 
+const optionalString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().optional(),
+);
+
 const envSchema = z.object({
   // Server Configuration
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -27,6 +32,17 @@ const envSchema = z.object({
 
   // Polymarket CLOB API
   POLYMARKET_CLOB_API_URL: z.string().url().default('https://clob.polymarket.com'),
+  POLYMARKET_GAMMA_API_URL: z.string().url().default('https://gamma-api.polymarket.com'),
+  GAMMA_API_REQUEST_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('2000'),
+  POLYMARKET_CLOB_WS_URL: optionalUrl,
+  POLYMARKET_CLOB_API_KEY: optionalString,
+  POLYMARKET_CLOB_API_SECRET: optionalString,
+  POLYMARKET_CLOB_API_PASSPHRASE: optionalString,
+  POLYMARKET_CLOB_SIGNER_ADDRESS: optionalAddress,
 
   // Polymarket Indexer
   POLYMARKET_NETWORK: z.enum(['mainnet', 'testnet', 'fork']).default('mainnet'),
@@ -63,6 +79,23 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default('30000'),
   ORDERBOOK_SNAPSHOT_TTL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('30000'),
+
+  // CLOB WebSocket
+  CLOB_WS_HEARTBEAT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('15000'),
+  CLOB_WS_RECONNECT_BASE_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('1000'),
+  CLOB_WS_RECONNECT_MAX_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())

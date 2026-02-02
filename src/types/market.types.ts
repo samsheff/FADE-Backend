@@ -9,14 +9,14 @@ export interface Market {
   marketSlug: string;
   active: boolean;
   tokens: Record<string, string>; // outcome -> token address
+  yesPrice: string | null;
+  noPrice: string | null;
   createdAt: Date;
   lastUpdated: Date;
 }
 
 export interface MarketRecord extends Market {
   polymarketMarketId: string | null;
-  yesPrice: string | null;
-  noPrice: string | null;
   volume: string | null;
   lastIndexedBlock: string | null;
 }
@@ -43,6 +43,15 @@ export interface OrderbookSnapshot {
 export interface MarketFilters {
   active?: boolean;
   category?: string;
+  expiresAfter?: Date;
+  limit?: number;
+  offset?: number;
+}
+
+export interface MarketSearchFilters {
+  query: string;
+  active?: boolean;
+  expiresAfter?: Date;
   limit?: number;
   offset?: number;
 }

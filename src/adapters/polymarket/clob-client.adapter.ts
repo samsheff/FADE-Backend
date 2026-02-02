@@ -149,6 +149,9 @@ export class PolymarketClobAdapter {
     data.tokens.forEach((t) => {
       tokens[t.outcome] = t.token_id;
     });
+    const normalizedOutcomes = data.outcomes.map((outcome) => outcome.toUpperCase());
+    const yesIndex = normalizedOutcomes.indexOf('YES');
+    const noIndex = normalizedOutcomes.indexOf('NO');
 
     return {
       id: data.condition_id,
@@ -161,6 +164,8 @@ export class PolymarketClobAdapter {
       marketSlug: data.slug,
       active: data.active,
       tokens,
+      yesPrice: yesIndex >= 0 ? data.outcome_prices[yesIndex] || null : null,
+      noPrice: noIndex >= 0 ? data.outcome_prices[noIndex] || null : null,
       createdAt: new Date(),
       lastUpdated: new Date(),
     };

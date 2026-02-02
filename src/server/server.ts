@@ -5,6 +5,10 @@ import { createPrismaClient, disconnectPrisma } from '../adapters/database/clien
 import { registerRoutes } from '../routes/index.js';
 import { MarketSyncJob } from '../jobs/market-sync.job.js';
 import { PositionUpdateJob } from '../jobs/position-update.job.js';
+import { MarketDataPubSub } from '../services/market-data/market-pubsub.service.js';
+import { MarketDataStreamService } from '../services/market-data/market-data-stream.service.js';
+import { MarketDataService } from '../services/market-data/market-data.service.js';
+import { MarketRealtimeGateway } from './market-realtime.gateway.js';
 
 async function start(): Promise<void> {
   try {
@@ -41,8 +45,18 @@ async function start(): Promise<void> {
     const marketSyncJob = new MarketSyncJob();
     const positionUpdateJob = new PositionUpdateJob();
 
-    marketSyncJob.start();
+    const pubsub = new MarketDataPubSub();
+    const marketDataService = new MarketDataService();
+    const streamService = new MarketDataStreamService(pubsub);
+    const realtimeGateway = new MarketRealtimeGateway(app, pubsub, marketDataService);
+
+    // Start market sync job (waits for initial full sync to complete)
+    logger.info('🔄 Running initial market sync...');
+    await marketSyncJob.start();
+    logger.info('✅ Initial market sync completed');
+
     positionUpdateJob.start();
+    await streamService.start();
     logger.info('✅ Background jobs started');
 
     // Graceful shutdown
@@ -52,6 +66,8 @@ async function start(): Promise<void> {
       // Stop background jobs
       marketSyncJob.stop();
       positionUpdateJob.stop();
+      streamService.stop();
+      realtimeGateway.close();
 
       await app.close();
       await disconnectPrisma();

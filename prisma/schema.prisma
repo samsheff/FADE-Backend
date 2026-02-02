@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -94,4 +94,42 @@ model OrderbookSnapshot {
   @@unique([marketId, outcome])
   @@index([expiresAt])
   @@map("orderbook_snapshots")
+}
+
+model OrderbookEvent {
+  id        String   @id @default(uuid())
+  marketId  String
+  outcome   String   // "YES" or "NO"
+  bestBid   Decimal? @map("best_bid")
+  bestAsk   Decimal? @map("best_ask")
+  midPrice  Decimal? @map("mid_price")
+  timestamp DateTime
+
+  @@index([marketId, outcome, timestamp])
+  @@index([timestamp])
+  @@map("orderbook_events")
+}
+
+model TradeEvent {
+  id        String   @id @default(uuid())
+  marketId  String
+  outcome   String   // "YES" or "NO"
+  price     Decimal
+  size      Decimal
+  timestamp DateTime
+
+  @@index([marketId, outcome, timestamp])
+  @@index([timestamp])
+  @@map("trade_events")
+}
+
+model AuthNonce {
+  walletAddress String   @id @map("wallet_address")
+  nonce         String
+  timestamp     Int
+  expiresAt     DateTime @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("auth_nonces")
 }

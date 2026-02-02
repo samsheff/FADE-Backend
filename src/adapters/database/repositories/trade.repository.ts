@@ -35,6 +35,16 @@ export class TradeRepository {
     return trades.map((t) => this.toModel(t));
   }
 
+  async findLatestTimestampByWallet(walletAddress: string): Promise<Date | null> {
+    const trade = await this.prisma.trade.findFirst({
+      where: { walletAddress },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+
+    return trade?.timestamp ?? null;
+  }
+
   async create(trade: Omit<Trade, 'id' | 'timestamp' | 'confirmedAt'>): Promise<Trade> {
     const created = await this.prisma.trade.create({
       data: {
@@ -52,6 +62,36 @@ export class TradeRepository {
     });
 
     return this.toModel(created);
+  }
+
+  async upsert(trade: Trade): Promise<Trade> {
+    const saved = await this.prisma.trade.upsert({
+      where: { id: trade.id },
+      create: {
+        id: trade.id,
+        walletAddress: trade.walletAddress,
+        marketId: trade.marketId,
+        outcome: trade.outcome,
+        side: trade.side,
+        price: trade.price,
+        size: trade.size,
+        txHash: trade.txHash,
+        blockNumber: trade.blockNumber,
+        gasUsed: trade.gasUsed,
+        fee: trade.fee,
+        timestamp: trade.timestamp,
+        confirmedAt: trade.confirmedAt,
+      },
+      update: {
+        txHash: trade.txHash,
+        blockNumber: trade.blockNumber,
+        gasUsed: trade.gasUsed,
+        fee: trade.fee,
+        confirmedAt: trade.confirmedAt,
+      },
+    });
+
+    return this.toModel(saved);
   }
 
   private toModel(prismaTrade: PrismaTrade): Trade {

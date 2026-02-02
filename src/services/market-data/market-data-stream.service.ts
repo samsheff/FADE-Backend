@@ -1,0 +1,234 @@
+import { MarketRepository } from '../../adapters/database/repositories/market.repository.js';
+import { OrderbookEventRepository } from '../../adapters/database/repositories/orderbook-event.repository.js';
+import { OrderbookRepository } from '../../adapters/database/repositories/orderbook.repository.js';
+import { TradeEventRepository } from '../../adapters/database/repositories/trade-event.repository.js';
+import { PolymarketClobAdapter } from '../../adapters/polymarket/clob-client.adapter.js';
+import { getEnvironment } from '../../config/environment.js';
+import { getLogger } from '../../utils/logger.js';
+import { MarketDataPubSub } from './market-pubsub.service.js';
+import { OrderbookState } from './orderbook-state.js';
+import { PolymarketCLOBWebSocketClient } from './polymarket-clob-ws.client.js';
+import { NormalizedMarketDataMessage, MarketOutcome } from '../../types/market-data.types.js';
+
+type OrderbookKey = `${string}:${MarketOutcome}`;
+
+export class MarketDataStreamService {
+  private marketRepo = new MarketRepository();
+  private orderbookEventRepo = new OrderbookEventRepository();
+  private orderbookRepo = new OrderbookRepository();
+  private tradeEventRepo = new TradeEventRepository();
+  private clobAdapter = new PolymarketClobAdapter();
+  private pubsub: MarketDataPubSub;
+  private wsClient: PolymarketCLOBWebSocketClient;
+  private logger = getLogger();
+  private orderbookStates = new Map<OrderbookKey, OrderbookState>();
+  private subscriptionKeys = new Set<OrderbookKey>();
+  private refreshTimer: NodeJS.Timeout | null = null;
+  private env = getEnvironment();
+
+  constructor(pubsub: MarketDataPubSub) {
+    this.pubsub = pubsub;
+    const env = getEnvironment();
+    const wsUrl =
+      env.POLYMARKET_CLOB_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
+
+    this.wsClient = new PolymarketCLOBWebSocketClient({
+      url: wsUrl,
+      heartbeatIntervalMs: env.CLOB_WS_HEARTBEAT_MS,
+      reconnectBaseMs: env.CLOB_WS_RECONNECT_BASE_MS,
+      reconnectMaxMs: env.CLOB_WS_RECONNECT_MAX_MS,
+    });
+  }
+
+  async start(): Promise<void> {
+    this.wsClient.onMessage((message) => {
+      this.handleMessage(message).catch((error) => {
+        this.logger.error({ error }, 'Failed handling CLOB message');
+      });
+    });
+    this.wsClient.connect();
+    await this.subscribeToActiveMarkets();
+    this.refreshTimer = setInterval(() => {
+      this.subscribeToActiveMarkets().catch((error) => {
+        this.logger.error({ error }, 'Failed refreshing market subscriptions');
+      });
+    }, getEnvironment().MARKET_SYNC_INTERVAL_MS);
+  }
+
+  stop(): void {
+    this.wsClient.disconnect();
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  private async subscribeToActiveMarkets(): Promise<void> {
+    const markets = await this.marketRepo.findAll();
+    const activeMarkets = markets.filter((market) => market.active);
+
+    for (const market of activeMarkets) {
+      for (const outcome of ['YES', 'NO'] as const) {
+        const tokenId = market.tokens[outcome];
+        if (!tokenId) {
+          continue;
+        }
+        const key = this.orderbookKey(market.id, outcome);
+        if (!this.subscriptionKeys.has(key)) {
+          await this.seedOrderbook(market.id, outcome, tokenId);
+          this.wsClient.subscribe({
+            marketId: market.id,
+            outcome,
+            tokenId,
+          });
+          this.subscriptionKeys.add(key);
+        }
+      }
+    }
+    this.logger.info(
+      { markets: activeMarkets.length },
+      'Subscribed to Polymarket CLOB WebSocket',
+    );
+  }
+
+  private async seedOrderbook(
+    marketId: string,
+    outcome: MarketOutcome,
+    tokenId: string,
+  ): Promise<void> {
+    try {
+      const snapshot = await this.clobAdapter.fetchOrderbook(tokenId);
+      const state = new OrderbookState();
+      state.seed(snapshot.bids, snapshot.asks);
+      this.orderbookStates.set(this.orderbookKey(marketId, outcome), state);
+
+      this.logger.debug(
+        {
+          marketId: marketId.slice(0, 8),
+          outcome,
+          bidLevels: snapshot.bids.length,
+          askLevels: snapshot.asks.length,
+        },
+        'Seeded orderbook with full depth',
+      );
+
+      // Persist snapshot for API cache
+      await this.orderbookRepo.upsertSnapshot({
+        marketId,
+        outcome,
+        bids: snapshot.bids,
+        asks: snapshot.asks,
+        expiresAt: new Date(Date.now() + this.env.ORDERBOOK_SNAPSHOT_TTL_MS),
+      });
+
+      await this.orderbookEventRepo.insert({
+        marketId,
+        outcome,
+        bestBid: state.getBestBid(),
+        bestAsk: state.getBestAsk(),
+        midPrice: state.getMidPrice(),
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      this.logger.warn({ error, marketId, outcome }, 'Failed to seed orderbook snapshot');
+    }
+  }
+
+  private async handleMessage(message: NormalizedMarketDataMessage): Promise<void> {
+    if (message.type === 'trade') {
+      await this.tradeEventRepo.insert({
+        marketId: message.marketId,
+        outcome: message.outcome,
+        price: message.price as string,
+        size: message.size as string,
+        timestamp: message.timestamp,
+      });
+
+      this.pubsub.publish(`market:${message.marketId}:price`, message);
+      return;
+    }
+
+    const key = this.orderbookKey(message.marketId, message.outcome);
+    let state = this.orderbookStates.get(key);
+
+    if (message.type === 'orderbook_update' && message.side && message.price) {
+      if (!state) {
+        state = new OrderbookState();
+        this.orderbookStates.set(key, state);
+      }
+      if (message.snapshot === 'start') {
+        state = new OrderbookState();
+        this.orderbookStates.set(key, state);
+      }
+      state.applyDelta(message.side, message.price, message.size || '0');
+      const event = {
+        type: 'orderbook_update' as const,
+        marketId: message.marketId,
+        outcome: message.outcome,
+        bestBid: state.getBestBid(),
+        bestAsk: state.getBestAsk(),
+        midPrice: state.getMidPrice(),
+        timestamp: message.timestamp,
+      };
+
+      if (!message.snapshot || message.snapshot === 'end') {
+        await this.orderbookEventRepo.insert({
+          marketId: event.marketId,
+          outcome: event.outcome,
+          bestBid: event.bestBid,
+          bestAsk: event.bestAsk,
+          midPrice: event.midPrice,
+          timestamp: event.timestamp,
+        });
+      }
+
+      this.pubsub.publish(`market:${message.marketId}:orderbook`, {
+        ...message,
+        bestBid: event.bestBid || undefined,
+        bestAsk: event.bestAsk || undefined,
+        midPrice: event.midPrice || undefined,
+      });
+      this.pubsub.publish(`market:${message.marketId}:price`, {
+        type: 'price_update',
+        marketId: message.marketId,
+        outcome: message.outcome,
+        midPrice: event.midPrice || undefined,
+        bestBid: event.bestBid || undefined,
+        bestAsk: event.bestAsk || undefined,
+        timestamp: event.timestamp,
+      });
+      return;
+    }
+
+    if (message.type === 'price_update' || message.type === 'orderbook_update') {
+      const bestBid = message.bestBid || (state ? state.getBestBid() : null);
+      const bestAsk = message.bestAsk || (state ? state.getBestAsk() : null);
+      const midPrice =
+        message.midPrice ||
+        (bestBid && bestAsk ? ((Number(bestBid) + Number(bestAsk)) / 2).toString() : null);
+
+      await this.orderbookEventRepo.insert({
+        marketId: message.marketId,
+        outcome: message.outcome,
+        bestBid: bestBid,
+        bestAsk: bestAsk,
+        midPrice: midPrice,
+        timestamp: message.timestamp,
+      });
+
+      this.pubsub.publish(`market:${message.marketId}:price`, {
+        type: 'price_update',
+        marketId: message.marketId,
+        outcome: message.outcome,
+        midPrice: midPrice || undefined,
+        bestBid: bestBid || undefined,
+        bestAsk: bestAsk || undefined,
+        timestamp: message.timestamp,
+      });
+    }
+  }
+
+  private orderbookKey(marketId: string, outcome: MarketOutcome): OrderbookKey {
+    return `${marketId}:${outcome}`;
+  }
+}

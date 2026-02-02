@@ -1,4 +1,4 @@
-import { PrismaClient, Market as PrismaMarket } from '@prisma/client';
+import { Prisma, PrismaClient, Market as PrismaMarket } from '@prisma/client';
 import { MarketFilters, MarketRecord } from '../../../types/market.types.js';
 import { getPrismaClient } from '../client.js';
 
@@ -21,6 +21,7 @@ export class MarketRepository {
     const where = {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.category && { categoryTag: filters.category }),
+      ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
     };
 
     const [markets, total] = await Promise.all([
@@ -29,6 +30,48 @@ export class MarketRepository {
         take: filters.limit || 20,
         skip: filters.offset || 0,
         orderBy: { lastUpdated: 'desc' },
+      }),
+      this.prisma.market.count({ where }),
+    ]);
+
+    return {
+      markets: markets.map((m) => this.toModel(m)),
+      total,
+    };
+  }
+
+  async searchMarkets(filters: {
+    query: string;
+    limit?: number;
+    offset?: number;
+    active?: boolean;
+    expiresAfter?: Date;
+  }): Promise<{ markets: MarketRecord[]; total: number }> {
+    const trimmedQuery = filters.query.trim();
+    const searchConditions: Prisma.MarketWhereInput[] = trimmedQuery
+      ? [
+          { question: { contains: trimmedQuery, mode: 'insensitive' } },
+          { marketSlug: { contains: trimmedQuery, mode: 'insensitive' } },
+          { categoryTag: { contains: trimmedQuery, mode: 'insensitive' } },
+        ]
+      : [];
+
+    const where: Prisma.MarketWhereInput = {
+      ...(filters.active !== undefined && { active: filters.active }),
+      ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
+      ...(searchConditions.length > 0 && { OR: searchConditions }),
+    };
+
+    const [markets, total] = await Promise.all([
+      this.prisma.market.findMany({
+        where,
+        take: filters.limit ?? 50,
+        skip: filters.offset ?? 0,
+        orderBy: [
+          { liquidity: 'desc' },
+          { volume24h: 'desc' },
+          { question: 'asc' },
+        ],
       }),
       this.prisma.market.count({ where }),
     ]);

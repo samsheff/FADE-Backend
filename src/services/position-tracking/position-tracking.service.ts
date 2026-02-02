@@ -1,21 +1,21 @@
 import { PositionRepository } from '../../adapters/database/repositories/position.repository.js';
-import { TradeRepository } from '../../adapters/database/repositories/trade.repository.js';
 import { MarketDataService } from '../market-data/market-data.service.js';
 import { Position, PositionListResponse } from '../../types/position.types.js';
 import { Trade, Outcome } from '../../types/trade.types.js';
 import { validateAddress } from '../../utils/validators.js';
 import { getLogger } from '../../utils/logger.js';
+import { TradeIngestionService } from './trade-ingestion.service.js';
 
 export class PositionTrackingService {
   private positionRepo: PositionRepository;
-  private tradeRepo: TradeRepository;
   private marketDataService: MarketDataService;
+  private tradeIngestionService: TradeIngestionService;
   private logger;
 
   constructor() {
     this.positionRepo = new PositionRepository();
-    this.tradeRepo = new TradeRepository();
     this.marketDataService = new MarketDataService();
+    this.tradeIngestionService = new TradeIngestionService();
     this.logger = getLogger();
   }
 
@@ -23,6 +23,15 @@ export class PositionTrackingService {
     this.logger.debug({ walletAddress }, 'Getting positions');
 
     validateAddress(walletAddress);
+
+    const ingestedTrades = await this.tradeIngestionService.ingestTradesForWallet(walletAddress);
+    for (const trade of ingestedTrades) {
+      try {
+        await this.updatePositionFromTrade(trade);
+      } catch (error) {
+        this.logger.error({ error, trade }, 'Failed to update position from ingested trade');
+      }
+    }
 
     const positions = await this.positionRepo.findByWallet(walletAddress);
 

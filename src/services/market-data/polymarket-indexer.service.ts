@@ -18,7 +18,10 @@ export class PolymarketIndexer {
   private marketRepo: MarketRepository;
   private orderbookRepo: OrderbookRepository;
   private cache: MarketCacheService;
+  private env;
   private logger;
+  private readonly syncConcurrency = 2;
+  private readonly batchDelayMs = 1000;
 
   constructor() {
     this.adapter = new PolymarketAdapter();
@@ -26,6 +29,7 @@ export class PolymarketIndexer {
     this.orderbookRepo = new OrderbookRepository();
     this.cache = new MarketCacheService();
     this.logger = getLogger();
+    this.env = getEnvironment();
   }
 
   async fullSync(): Promise<SyncResult> {
@@ -36,18 +40,26 @@ export class PolymarketIndexer {
       errors: 0,
     };
 
+    this.logger.info('📥 Fetching all markets from Polymarket...');
     let markets: ReturnType<PolymarketAdapter['getAllMarkets']>;
     try {
       markets = await this.adapter.getAllMarkets();
+      this.logger.info({ count: markets.length }, '✅ Fetched markets from Polymarket');
     } catch (error) {
       this.logger.error({ error }, 'Full sync failed fetching markets');
       result.errors += 1;
       return result;
     }
 
+    if (markets.length === 0) {
+      this.logger.warn('⚠️  No markets returned from Polymarket API');
+      return result;
+    }
+
+    this.logger.info({ total: markets.length }, '🔄 Starting market state sync...');
     const currentBlock = await this.safeCurrentBlock();
 
-    for (const market of markets) {
+    await this.processInBatches(markets, async (market) => {
       result.marketsProcessed += 1;
       try {
         const existing = await this.marketRepo.findById(market.id);
@@ -56,7 +68,10 @@ export class PolymarketIndexer {
         const upsertPayload = this.mergeMarketRecord(existing, market, state, currentBlock);
         await this.marketRepo.upsert(upsertPayload);
 
-        await this.upsertSyntheticOrderbook(market.id, market.outcomes, upsertPayload);
+        // Synthetic orderbooks disabled - real orderbooks come from WebSocket stream
+        // if (this.env.NODE_ENV !== 'production') {
+        //   await this.upsertSyntheticOrderbook(market.id, market.outcomes, upsertPayload);
+        // }
         this.invalidateCache(market.id, market.outcomes);
 
         result.marketsUpdated += 1;
@@ -64,7 +79,7 @@ export class PolymarketIndexer {
         result.errors += 1;
         this.logger.error({ error, marketId: market.id }, 'Failed to sync market');
       }
-    }
+    });
 
     return result;
   }
@@ -80,7 +95,7 @@ export class PolymarketIndexer {
     const markets = await this.marketRepo.findAll();
     const currentBlock = await this.safeCurrentBlock();
 
-    for (const market of markets) {
+    await this.processInBatches(markets, async (market) => {
       result.marketsProcessed += 1;
       try {
         const state = await this.safeMarketState(market.id);
@@ -88,13 +103,16 @@ export class PolymarketIndexer {
 
         if (!shouldUpdate) {
           result.marketsSkipped += 1;
-          continue;
+          return;
         }
 
         const upsertPayload = this.mergeMarketRecord(market, null, state, currentBlock);
         await this.marketRepo.upsert(upsertPayload);
 
-        await this.upsertSyntheticOrderbook(market.id, market.outcomes, upsertPayload);
+        // Synthetic orderbooks disabled - real orderbooks come from WebSocket stream
+        // if (this.env.NODE_ENV !== 'production') {
+        //   await this.upsertSyntheticOrderbook(market.id, market.outcomes, upsertPayload);
+        // }
         this.invalidateCache(market.id, market.outcomes);
 
         result.marketsUpdated += 1;
@@ -102,7 +120,7 @@ export class PolymarketIndexer {
         result.errors += 1;
         this.logger.error({ error, marketId: market.id }, 'Failed to sync market state');
       }
-    }
+    });
 
     return result;
   }
@@ -134,6 +152,30 @@ export class PolymarketIndexer {
         volume: null,
         lastUpdatedBlock: null,
       };
+    }
+  }
+
+  private async processInBatches<T>(
+    items: T[],
+    handler: (item: T) => Promise<void>,
+  ): Promise<void> {
+    const totalBatches = Math.ceil(items.length / this.syncConcurrency);
+    for (let i = 0; i < items.length; i += this.syncConcurrency) {
+      const batch = items.slice(i, i + this.syncConcurrency);
+      const batchNum = Math.floor(i / this.syncConcurrency) + 1;
+
+      // Log progress every 10 batches or on first/last batch
+      if (batchNum === 1 || batchNum === totalBatches || batchNum % 10 === 0) {
+        this.logger.info(
+          { batch: batchNum, total: totalBatches, progress: `${Math.round((batchNum / totalBatches) * 100)}%` },
+          'Processing batch',
+        );
+      }
+
+      await Promise.all(batch.map((item) => handler(item)));
+      if (this.batchDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.batchDelayMs));
+      }
     }
   }
 

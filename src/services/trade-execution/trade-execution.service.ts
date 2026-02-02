@@ -14,7 +14,6 @@ import {
   InsufficientLiquidityError,
 } from '../../utils/errors.js';
 import { validateAddress, validateSize, validateMarketId } from '../../utils/validators.js';
-import { formatUSDC } from '../../utils/formatters.js';
 import { getLogger } from '../../utils/logger.js';
 
 export class TradeExecutionService {
@@ -63,7 +62,7 @@ export class TradeExecutionService {
     );
 
     // Calculate estimated cost and slippage
-    const { estimatedCost, slippage } = this.calculateTradeMetrics(
+    const { estimatedCost, slippage, bestPrice } = this.calculateTradeMetrics(
       request.side,
       request.size,
       orderbook,
@@ -79,6 +78,7 @@ export class TradeExecutionService {
       walletAddress as `0x${string}`,
       request,
       tokenId,
+      bestPrice,
     );
 
     this.logger.info(
@@ -97,7 +97,7 @@ export class TradeExecutionService {
     side: 'buy' | 'sell',
     size: string,
     orderbook: { bids: Array<{ price: string; size: string }>; asks: Array<{ price: string; size: string }> },
-  ): { estimatedCost: string; slippage: string } {
+  ): { estimatedCost: string; slippage: string; bestPrice: string } {
     const sizeNum = parseFloat(size);
     const levels = side === 'buy' ? orderbook.asks : orderbook.bids;
 
@@ -132,6 +132,7 @@ export class TradeExecutionService {
     return {
       estimatedCost: totalCost.toFixed(2),
       slippage: (slippage * 100).toFixed(2),
+      bestPrice: bestPrice.toString(),
     };
   }
 
@@ -139,29 +140,28 @@ export class TradeExecutionService {
     walletAddress: `0x${string}`,
     request: PrepareTradeRequest,
     tokenId: string,
+    bestPrice: string,
   ): Promise<UnsignedTransaction> {
-    // This is a simplified implementation
-    // In production, you would fetch real orders and build the proper transaction
     const ctfExchangeAddress = getContractAddress('CTF_EXCHANGE');
+    const sizeNum = parseFloat(request.size);
+    const priceNum = parseFloat(bestPrice);
+    const outcomeAmount = this.toBaseUnits(sizeNum, 6);
+    const usdcAmount = this.toBaseUnits(sizeNum * priceNum, 6);
 
-    // Placeholder: encode a simple transaction
-    // In reality, you'd need to:
-    // 1. Fetch best orders from orderbook
-    // 2. Build order parameters
-    // 3. Sign order (or use existing signed orders)
-    // 4. Encode fillOrder call
+    const makerAmount = request.side === 'buy' ? outcomeAmount : usdcAmount;
+    const takerAmount = request.side === 'buy' ? usdcAmount : outcomeAmount;
     const data = encodeFunctionData({
       abi: CTF_EXCHANGE_ABI,
       functionName: 'fillOrder',
       args: [
         {
-          salt: 0n,
+          salt: BigInt(Date.now()),
           maker: walletAddress,
           signer: walletAddress,
           taker: '0x0000000000000000000000000000000000000000' as `0x${string}`,
           tokenId: BigInt(tokenId),
-          makerAmount: BigInt(parseFloat(request.size) * 1e6),
-          takerAmount: BigInt(parseFloat(request.size) * 0.5 * 1e6),
+          makerAmount,
+          takerAmount,
           expiration: BigInt(Math.floor(Date.now() / 1000) + 3600),
           nonce: 0n,
           feeRateBps: 0n,
@@ -169,7 +169,7 @@ export class TradeExecutionService {
           signatureType: 0,
         },
         '0x' as `0x${string}`,
-        BigInt(parseFloat(request.size) * 1e6),
+        outcomeAmount,
       ],
     });
 
@@ -178,5 +178,10 @@ export class TradeExecutionService {
       data,
       value: 0n,
     });
+  }
+
+  private toBaseUnits(value: number, decimals: number): bigint {
+    const factor = 10 ** decimals;
+    return BigInt(Math.round(value * factor));
   }
 }

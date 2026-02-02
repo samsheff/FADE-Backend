@@ -105,9 +105,11 @@ model OrderbookEvent {
   bestAsk   Decimal? @map("best_ask")
   midPrice  Decimal? @map("mid_price")
   timestamp DateTime
+  source    String   @default("realtime") // "historical" | "realtime"
 
   @@index([marketId, outcome, timestamp])
   @@index([timestamp])
+  @@index([source])
   @@map("orderbook_events")
 }
 
@@ -118,10 +120,30 @@ model TradeEvent {
   price     Decimal
   size      Decimal
   timestamp DateTime
+  source    String   @default("realtime") // "historical" | "realtime"
 
+  @@unique([marketId, outcome, timestamp, price, size])
   @@index([marketId, outcome, timestamp])
   @@index([timestamp])
+  @@index([source])
   @@map("trade_events")
+}
+
+model MarketBackfill {
+  marketId             String    @id
+  status               String    // "pending" | "in_progress" | "completed" | "failed"
+  tradeEventsCount     Int       @default(0)
+  orderbookEventsCount Int       @default(0)
+  earliestTimestamp    DateTime?
+  latestTimestamp      DateTime?
+  errorMessage         String?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status])
+  @@map("market_backfills")
 }
 
 model AuthNonce {

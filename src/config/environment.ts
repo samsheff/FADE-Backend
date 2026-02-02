@@ -33,6 +33,7 @@ const envSchema = z.object({
   // Polymarket CLOB API
   POLYMARKET_CLOB_API_URL: z.string().url().default('https://clob.polymarket.com'),
   POLYMARKET_GAMMA_API_URL: z.string().url().default('https://gamma-api.polymarket.com'),
+  POLYMARKET_DATA_API_URL: z.string().url().default('https://data-api.polymarket.com'),
   GAMMA_API_REQUEST_INTERVAL_MS: z
     .string()
     .transform(Number)
@@ -112,6 +113,18 @@ const envSchema = z.object({
     .transform(Number)
     .pipe(z.number().int().positive())
     .default('300000'),
+
+  // Historical Data Backfill
+  HISTORICAL_BACKFILL_RATE_LIMIT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('1000'),
+  HISTORICAL_BACKFILL_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('5000'),
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

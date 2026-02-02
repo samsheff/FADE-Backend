@@ -4,6 +4,7 @@ import { getMarketsRoutes } from './markets/get-markets.js';
 import { getCandlesRoutes } from './markets/get-candles.js';
 import { getPositionsRoutes } from './positions/get-positions.js';
 import { prepareTradeRoutes } from './trades/prepare-trade.js';
+import { backfillRoutes } from './admin/backfill.routes.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Auth routes
@@ -18,4 +19,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Trade routes
   await app.register(prepareTradeRoutes, { prefix: '/api/v1/trades' });
+
+  // Admin routes
+  await app.register(backfillRoutes, { prefix: '/api/v1/admin' });
 }

@@ -6,6 +6,7 @@ import { MarketRecord, Orderbook } from '../../types/market.types.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import type { MarketDataStreamService } from './market-data-stream.service.js';
+import type { HistoricalMarketDataSync } from './historical-sync.service.js';
 
 interface SyncResult {
   marketsProcessed: number;
@@ -24,6 +25,7 @@ export class PolymarketIndexer {
   private readonly syncConcurrency = 2;
   private readonly batchDelayMs = 1000;
   private streamService: MarketDataStreamService | null = null;
+  private historicalSync: HistoricalMarketDataSync | null = null;
 
   constructor() {
     this.adapter = new PolymarketAdapter();
@@ -36,6 +38,10 @@ export class PolymarketIndexer {
 
   setStreamService(streamService: MarketDataStreamService): void {
     this.streamService = streamService;
+  }
+
+  setHistoricalSync(historicalSync: HistoricalMarketDataSync): void {
+    this.historicalSync = historicalSync;
   }
 
   async fullSync(): Promise<SyncResult> {
@@ -73,6 +79,13 @@ export class PolymarketIndexer {
 
         const upsertPayload = this.mergeMarketRecord(existing, market, state, currentBlock);
         await this.marketRepo.upsert(upsertPayload);
+
+        // Trigger backfill for new markets (don't block)
+        if (!existing && this.historicalSync) {
+          this.historicalSync.backfillNewMarkets([market.id]).catch((error) => {
+            this.logger.warn({ error, marketId: market.id }, 'Backfill failed');
+          });
+        }
 
         // Synthetic orderbooks disabled - real orderbooks come from WebSocket stream
         // if (this.env.NODE_ENV !== 'production') {

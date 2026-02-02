@@ -24,6 +24,43 @@ export class OrderbookEventRepository {
     return this.toModel(saved);
   }
 
+  /**
+   * Batch insert orderbook events with deduplication
+   * @param events - Array of orderbook events to insert
+   * @param source - Source of the events ("historical" | "realtime")
+   * @returns Number of events actually inserted
+   */
+  async batchInsert(events: OrderbookEventRecord[], source: 'historical' | 'realtime' = 'realtime'): Promise<number> {
+    if (events.length === 0) {
+      return 0;
+    }
+
+    const batchSize = 1000;
+    let totalInserted = 0;
+
+    for (let i = 0; i < events.length; i += batchSize) {
+      const batch = events.slice(i, i + batchSize);
+
+      // Use createMany for batch insert
+      const result = await this.prisma.orderbookEvent.createMany({
+        data: batch.map((event) => ({
+          marketId: event.marketId,
+          outcome: event.outcome,
+          bestBid: event.bestBid,
+          bestAsk: event.bestAsk,
+          midPrice: event.midPrice,
+          timestamp: event.timestamp,
+          source,
+        })),
+        skipDuplicates: true,
+      });
+
+      totalInserted += result.count;
+    }
+
+    return totalInserted;
+  }
+
   async findByMarket(
     marketId: string,
     outcome: string,

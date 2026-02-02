@@ -76,14 +76,22 @@ export class MarketRepository {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
       ...(searchConditions.length > 0 && { OR: searchConditions }),
-      // Exclude markets that completed early with zero prices
-      NOT: {
-        AND: [
-          { completedEarly: true },
-          { yesPrice: 0 },
-          { noPrice: 0 },
-        ],
-      },
+      // Exclude resolved/closed markets
+      NOT: [
+        // Exclude markets that completed early with zero prices
+        {
+          AND: [
+            { completedEarly: true },
+            { yesPrice: 0 },
+            { noPrice: 0 },
+          ],
+        },
+        // Exclude markets with extreme prices (0 or 100 cents = resolved)
+        { yesPrice: 0 },
+        { yesPrice: 100 },
+        { noPrice: 0 },
+        { noPrice: 100 },
+      ],
     };
 
     const [markets, total] = await Promise.all([

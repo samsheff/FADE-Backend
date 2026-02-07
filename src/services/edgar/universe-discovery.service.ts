@@ -5,6 +5,7 @@ import { getLogger } from '../../utils/logger.js';
 import { InstrumentType } from '../../types/instrument.types.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
 import { getEnvironment } from '../../config/environment.js';
+import { SearchIndexerService } from '../search/search-indexer.service.js';
 
 interface SecCompanyTicker {
   cik_str: number;
@@ -37,6 +38,7 @@ export class EdgarUniverseDiscoveryService {
   private logger;
   private rateLimiter: RateLimiter;
   private userAgent: string;
+  private searchIndexer: SearchIndexerService | null = null;
 
   // SEC's authoritative source for all filers
   private static readonly COMPANY_TICKERS_URL =
@@ -50,6 +52,11 @@ export class EdgarUniverseDiscoveryService {
     const env = getEnvironment();
     this.rateLimiter = new RateLimiter(env.EDGAR_API_RATE_LIMIT_MS);
     this.userAgent = env.EDGAR_API_USER_AGENT;
+
+    // Initialize search indexer if enabled
+    if (env.SEARCH_INDEXER_ENABLED) {
+      this.searchIndexer = new SearchIndexerService();
+    }
   }
 
   /**
@@ -229,6 +236,13 @@ export class EdgarUniverseDiscoveryService {
                 },
               });
 
+              // Index instrument in search (don't block)
+              if (this.searchIndexer) {
+                this.searchIndexer.indexInstrument(existing.id).catch((error) => {
+                  this.logger.warn({ error, instrumentId: existing.id }, 'Search indexing failed');
+                });
+              }
+
               updatedCount++;
             }
           } else {
@@ -252,6 +266,13 @@ export class EdgarUniverseDiscoveryService {
                 metadataSource: 'EDGAR',
               },
             });
+
+            // Index instrument in search (don't block)
+            if (this.searchIndexer) {
+              this.searchIndexer.indexInstrument(instrument.id).catch((error) => {
+                this.logger.warn({ error, instrumentId: instrument.id }, 'Search indexing failed');
+              });
+            }
 
             newCount++;
           }

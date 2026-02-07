@@ -207,6 +207,23 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default('12'),
 
+  // ============================================================================
+  // Elasticsearch Configuration
+  // ============================================================================
+
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+  ELASTICSEARCH_INDEX_PREFIX: z.string().default('terminal_'),
+  SEARCH_INDEXER_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
+  SEARCH_INDEXER_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('100'),
+
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });

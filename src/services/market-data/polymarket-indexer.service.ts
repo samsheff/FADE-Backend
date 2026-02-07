@@ -7,6 +7,7 @@ import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import type { MarketDataStreamService } from './market-data-stream.service.js';
 import type { HistoricalMarketDataSync } from './historical-sync.service.js';
+import { SearchIndexerService } from '../search/search-indexer.service.js';
 
 interface SyncResult {
   marketsProcessed: number;
@@ -26,6 +27,7 @@ export class PolymarketIndexer {
   private readonly batchDelayMs = 1000;
   private streamService: MarketDataStreamService | null = null;
   private historicalSync: HistoricalMarketDataSync | null = null;
+  private searchIndexer: SearchIndexerService | null = null;
 
   constructor() {
     this.adapter = new PolymarketAdapter();
@@ -34,6 +36,11 @@ export class PolymarketIndexer {
     this.cache = new MarketCacheService();
     this.logger = getLogger();
     this.env = getEnvironment();
+
+    // Initialize search indexer if enabled
+    if (this.env.SEARCH_INDEXER_ENABLED) {
+      this.searchIndexer = new SearchIndexerService();
+    }
   }
 
   setStreamService(streamService: MarketDataStreamService): void {
@@ -79,6 +86,13 @@ export class PolymarketIndexer {
 
         const upsertPayload = this.mergeMarketRecord(existing, market, state, currentBlock);
         await this.marketRepo.upsert(upsertPayload);
+
+        // Index market in search (don't block)
+        if (this.searchIndexer) {
+          this.searchIndexer.indexMarket(market.id).catch((error) => {
+            this.logger.warn({ error, marketId: market.id }, 'Search indexing failed');
+          });
+        }
 
         // Trigger backfill for new markets (don't block)
         if (!existing && this.historicalSync) {

@@ -9,6 +9,7 @@ import { instrumentsRoutes } from './instruments/instruments.routes.js';
 import { signalsRoutes } from './signals/signals.routes.js';
 import { filingsRoutes } from './filings/filings.routes.js';
 import { universeRoutes } from './universe/universe.routes.js';
+import { searchRoutes } from './search/search.routes.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Auth routes
@@ -32,4 +33,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(signalsRoutes, { prefix: '/api/v1/signals' });
   await app.register(filingsRoutes, { prefix: '/api/v1/filings' });
   await app.register(universeRoutes, { prefix: '/api/v1/universe' });
+
+  // Search routes
+  await app.register(searchRoutes, { prefix: '/api/v1/search' });
 }

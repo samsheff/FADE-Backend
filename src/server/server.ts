@@ -7,6 +7,7 @@ import { MarketSyncJob } from '../jobs/market-sync.job.js';
 import { PositionUpdateJob } from '../jobs/position-update.job.js';
 import { EdgarSyncJob } from '../jobs/edgar-sync.job.js';
 import { EdgarUniverseDiscoveryJob } from '../jobs/edgar-universe-discovery.job.js';
+import { SearchIndexerJob } from '../jobs/search-indexer.job.js';
 import { MarketDataPubSub } from '../services/market-data/market-pubsub.service.js';
 import { MarketDataStreamService } from '../services/market-data/market-data-stream.service.js';
 import { MarketDataService } from '../services/market-data/market-data.service.js';
@@ -94,6 +95,20 @@ async function start(): Promise<void> {
       logger.info('✅ EDGAR filing sync job started and scheduled');
     }
 
+    // Start search indexer if enabled
+    let searchIndexerJob: SearchIndexerJob | null = null;
+    if (env.SEARCH_INDEXER_ENABLED) {
+      logger.info('🔍 Starting search indexer...');
+      searchIndexerJob = new SearchIndexerJob();
+
+      try {
+        await searchIndexerJob.start(); // Wait for initial index
+        logger.info('✅ Search indexer initialized');
+      } catch (error) {
+        logger.error({ error }, 'Failed to start search indexer');
+      }
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`${signal} received, shutting down gracefully...`);
@@ -112,6 +127,11 @@ async function start(): Promise<void> {
       if (edgarUniverseJob) {
         logger.info('Stopping EDGAR universe discovery job...');
         edgarUniverseJob.stop();
+      }
+
+      if (searchIndexerJob) {
+        logger.info('Stopping search indexer job...');
+        searchIndexerJob.stop();
       }
 
       await app.close();

@@ -63,19 +63,33 @@ export class EdgarIndexerService {
 
       const allFilings: FilingMetadata[] = [];
 
-      // Fetch for each form type (SEC RSS requires separate requests)
+      // Calculate cutoff date for backfill
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - env.EDGAR_DISCOVERY_LOOKBACK_DAYS);
+
+      this.logger.info(
+        {
+          lookbackDays: env.EDGAR_DISCOVERY_LOOKBACK_DAYS,
+          cutoffDate,
+          maxPagesPerType: env.EDGAR_MAX_BACKFILL_PAGES,
+        },
+        'Starting backfill discovery',
+      );
+
+      // Fetch for each form type with backfill (SEC RSS requires separate requests)
       for (const formType of formTypes) {
         try {
-          const filings = await this.rssAdapter.fetchRecentFilings({
-            formTypes: [formType],
-            limit: 100,
-          });
+          const filings = await this.rssAdapter.fetchFilingsWithBackfill(
+            formType,
+            cutoffDate,
+            env.EDGAR_MAX_BACKFILL_PAGES,
+          );
 
           allFilings.push(...filings);
 
           this.logger.info(
             { formType, count: filings.length },
-            'Fetched filings for form type',
+            'Backfill complete for form type',
           );
         } catch (error) {
           this.logger.warn(

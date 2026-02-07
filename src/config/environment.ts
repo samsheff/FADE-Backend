@@ -188,6 +188,12 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default('30'), // Scan last 30 days of filings
 
+  EDGAR_MAX_BACKFILL_PAGES: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('100'), // 100 pages × 100 filings = 10k max per form type
+
   // Signal computation thresholds (configurable)
   SIGNAL_DILUTION_SHELF_THRESHOLD_PCT: z
     .string()

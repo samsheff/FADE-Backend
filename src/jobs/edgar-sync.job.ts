@@ -94,8 +94,20 @@ export class EdgarSyncJob {
 
       // Stage 1: Discovery (if enabled)
       if (env.EDGAR_DISCOVERY_MODE) {
+        const discoveryStart = Date.now();
         stats.newFilings = await this.indexer.discoverNewFilings();
-        this.logger.info({ count: stats.newFilings }, 'Discovery complete');
+        const discoveryDuration = Date.now() - discoveryStart;
+
+        this.logger.info(
+          {
+            count: stats.newFilings,
+            durationMs: discoveryDuration,
+            filingsPerSec: stats.newFilings > 0
+              ? ((stats.newFilings / discoveryDuration) * 1000).toFixed(2)
+              : '0',
+          },
+          'Discovery complete',
+        );
       }
 
       // Stage 2: Download pending filings

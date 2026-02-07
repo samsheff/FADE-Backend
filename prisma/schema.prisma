@@ -14,6 +14,7 @@ model Market {
   id                 String   @id
   question           String
   outcomes           Json     // Array of outcome names (e.g., ["Yes", "No"])
+  outcomeMapping     Json?    @map("outcome_mapping") // { "YES": "AFC", "NO": "NFC" }
   expiryDate         DateTime
   liquidity          Decimal
   volume24h          Decimal

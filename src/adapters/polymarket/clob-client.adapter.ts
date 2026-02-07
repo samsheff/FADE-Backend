@@ -3,6 +3,7 @@ import { getLogger } from '../../utils/logger.js';
 import { ExternalApiError, MarketNotFoundError } from '../../utils/errors.js';
 import { Market } from '../../types/market.types.js';
 import { Orderbook, OrderbookLevel } from '../../types/market.types.js';
+import { normalizeOutcomes, getOriginalOutcome } from '../../utils/outcome-normalization.utils.js';
 
 interface PolymarketMarketResponse {
   condition_id: string;
@@ -153,19 +154,50 @@ export class PolymarketClobAdapter {
   }
 
   private toMarket(data: PolymarketMarketResponse): Market {
-    // Build tokens map
+    // Normalize outcomes to canonical YES/NO
+    const outcomeMapping = normalizeOutcomes(data.outcomes, data.question);
+
+    if (!outcomeMapping) {
+      this.logger.warn(
+        {
+          conditionId: data.condition_id,
+          question: data.question.slice(0, 50),
+          outcomes: data.outcomes,
+        },
+        'Could not normalize outcomes (non-binary market)',
+      );
+    }
+
+    // Build tokens map using CANONICAL uppercase YES/NO keys
     const tokens: Record<string, string> = {};
-    data.tokens.forEach((t) => {
-      tokens[t.outcome] = t.token_id;
-    });
-    const normalizedOutcomes = data.outcomes.map((outcome) => outcome.toUpperCase());
-    const yesIndex = normalizedOutcomes.indexOf('YES');
-    const noIndex = normalizedOutcomes.indexOf('NO');
+    if (outcomeMapping) {
+      // Map tokens using canonical keys
+      data.tokens.forEach((t) => {
+        if (t.outcome === outcomeMapping.YES) {
+          tokens['YES'] = t.token_id;
+        } else if (t.outcome === outcomeMapping.NO) {
+          tokens['NO'] = t.token_id;
+        }
+      });
+    } else {
+      // Fallback: normalize to uppercase
+      data.tokens.forEach((t) => {
+        tokens[t.outcome.toUpperCase()] = t.token_id;
+      });
+    }
+
+    // Find indices using the mapped original outcome names
+    const yesOutcomeName = outcomeMapping ? outcomeMapping.YES : 'YES';
+    const noOutcomeName = outcomeMapping ? outcomeMapping.NO : 'NO';
+
+    const yesIndex = data.outcomes.indexOf(yesOutcomeName);
+    const noIndex = data.outcomes.indexOf(noOutcomeName);
 
     return {
       id: data.condition_id,
       question: data.question,
       outcomes: data.outcomes,
+      outcomeMapping: outcomeMapping as any,
       expiryDate: new Date(data.end_date_iso),
       liquidity: data.liquidity,
       volume24h: data.volume,

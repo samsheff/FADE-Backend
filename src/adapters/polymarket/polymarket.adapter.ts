@@ -1,12 +1,14 @@
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
+import { normalizeOutcomes, type OutcomeMapping } from '../../utils/outcome-normalization.utils.js';
 
 export interface PolymarketMarket {
   id: string;
   polymarketMarketId: string | null;
   question: string;
   outcomes: string[];
+  outcomeMapping: OutcomeMapping | null;
   expiryDate: Date;
   marketSlug: string;
   categoryTag: string | null;
@@ -150,6 +152,7 @@ export class PolymarketAdapter {
       const { yesPrice, noPrice } = this.extractYesNoPrices(
         gammaMarket.outcomes,
         gammaMarket.outcomePrices,
+        gammaMarket.question,
       );
 
       return {
@@ -180,19 +183,50 @@ export class PolymarketAdapter {
     const rawOutcomes = this.normalizeStringArray(data.outcomes);
     const tokenIds = this.normalizeStringArray(data.clobTokenIds);
 
-    // Normalize outcomes to uppercase for consistency (YES/NO instead of Yes/No)
-    const outcomes = rawOutcomes.map((o) => o.toUpperCase());
+    // Store original outcomes as-is (preserve case and original names)
+    const outcomes = rawOutcomes;
+
+    // Create outcome mapping for normalization
+    const question = data.question || 'Unknown market';
+    const outcomeMapping = normalizeOutcomes(outcomes, question);
+
+    if (!outcomeMapping) {
+      this.logger.warn(
+        {
+          conditionId: data.conditionId?.slice(0, 8),
+          question: question.slice(0, 50),
+          outcomes,
+        },
+        'Could not normalize outcomes (non-binary market)',
+      );
+    }
+
+    // Map tokens using CANONICAL uppercase YES/NO keys
+    // This ensures all downstream code can use tokens["YES"] and tokens["NO"] reliably
     const tokens: Record<string, string> = {};
-    outcomes.forEach((outcome, index) => {
-      tokens[outcome] = tokenIds[index] || '';
-    });
+    if (outcomeMapping) {
+      const yesIndex = outcomes.indexOf(outcomeMapping.YES);
+      const noIndex = outcomes.indexOf(outcomeMapping.NO);
+
+      if (yesIndex >= 0) {
+        tokens['YES'] = tokenIds[yesIndex] || '';
+      }
+      if (noIndex >= 0) {
+        tokens['NO'] = tokenIds[noIndex] || '';
+      }
+    } else {
+      // Fallback: use original outcome names if normalization failed
+      outcomes.forEach((outcome, index) => {
+        tokens[outcome.toUpperCase()] = tokenIds[index] || '';
+      });
+    }
 
     // Debug log for first few markets to see what we're getting
     if (tokenIds.length === 0 && outcomes.length > 0) {
       this.logger.warn(
         {
           conditionId: data.conditionId?.slice(0, 8),
-          question: data.question?.slice(0, 50),
+          question: question.slice(0, 50),
           hasClobTokenIds: !!data.clobTokenIds,
           clobTokenIdsType: typeof data.clobTokenIds,
           clobTokenIdsValue: data.clobTokenIds,
@@ -208,8 +242,9 @@ export class PolymarketAdapter {
     return {
       id: data.conditionId || data.id || '',
       polymarketMarketId: data.marketId ? data.marketId.toString() : null,
-      question: data.question || 'Unknown market',
+      question,
       outcomes,
+      outcomeMapping,
       expiryDate,
       marketSlug: data.slug || data.conditionId || data.id || '',
       categoryTag: data.tags?.[0] || data.category || null,
@@ -236,13 +271,22 @@ export class PolymarketAdapter {
   private extractYesNoPrices(
     outcomes?: string[] | string,
     outcomePrices?: string[] | string,
+    question?: string,
   ): { yesPrice: string | null; noPrice: string | null } {
-    const normalizedOutcomes = this.normalizeStringArray(outcomes).map((outcome) =>
-      outcome.toUpperCase(),
-    );
+    const outcomeArray = this.normalizeStringArray(outcomes);
     const prices = this.normalizeStringArray(outcomePrices);
-    const yesIndex = normalizedOutcomes.indexOf('YES');
-    const noIndex = normalizedOutcomes.indexOf('NO');
+
+    // Use outcome normalization to map to canonical YES/NO
+    const outcomeMapping = normalizeOutcomes(outcomeArray, question || '');
+
+    if (!outcomeMapping) {
+      // Non-binary market or couldn't normalize
+      return { yesPrice: null, noPrice: null };
+    }
+
+    // Find indices of the original outcome names in the array
+    const yesIndex = outcomeArray.indexOf(outcomeMapping.YES);
+    const noIndex = outcomeArray.indexOf(outcomeMapping.NO);
 
     return {
       yesPrice: yesIndex >= 0 ? prices[yesIndex] || null : null,

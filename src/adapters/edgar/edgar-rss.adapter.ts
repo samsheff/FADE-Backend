@@ -41,11 +41,13 @@ export class EdgarRssAdapter {
    * No company filtering - we ingest broadly and filter later.
    *
    * @param formTypes - Optional filter by form type (e.g., ['8-K', '424B5'])
+   * @param startOffset - Pagination offset (default: 0)
    * @returns Array of filing metadata
    */
   async fetchRecentFilings(options?: {
     formTypes?: string[];
     limit?: number;
+    startOffset?: number;
   }): Promise<FilingMetadata[]> {
     await this.rateLimiter.wait();
 
@@ -59,7 +61,8 @@ export class EdgarRssAdapter {
         // SEC RSS accepts single form type per request
         // For multiple types, we'd need to make multiple requests
         const formType = options.formTypes[0];
-        url = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=${formType}&company=&dateb=&owner=include&start=0&count=${options.limit || 100}&output=atom`;
+        const startOffset = options.startOffset || 0;
+        url = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=${formType}&company=&dateb=&owner=include&start=${startOffset}&count=${options.limit || 100}&output=atom`;
       }
 
       const response = await fetch(url, {
@@ -104,6 +107,111 @@ export class EdgarRssAdapter {
       this.logger.error({ error }, 'Failed to fetch SEC RSS feed');
       throw error;
     }
+  }
+
+  /**
+   * Fetch filings with historical backfill
+   *
+   * Paginates through RSS feed until cutoff date is reached.
+   * This enables historical coverage beyond the most recent 100 filings.
+   *
+   * @param formType - Form type to fetch (e.g., '8-K', '424B5')
+   * @param cutoffDate - Only include filings after this date
+   * @param maxPages - Maximum pages to fetch (safety limit)
+   * @returns Array of filing metadata within lookback window
+   */
+  async fetchFilingsWithBackfill(
+    formType: string,
+    cutoffDate: Date,
+    maxPages = 100,
+  ): Promise<FilingMetadata[]> {
+    let currentOffset = 0;
+    let pageCount = 0;
+    const allFilings: FilingMetadata[] = [];
+
+    this.logger.info(
+      { formType, cutoffDate, maxPages },
+      'Starting backfill for form type',
+    );
+
+    while (pageCount < maxPages) {
+      const pageFilings = await this.fetchRecentFilings({
+        formTypes: [formType],
+        limit: 100,
+        startOffset: currentOffset,
+      });
+
+      if (pageFilings.length === 0) {
+        this.logger.info(
+          { formType, pageCount, currentOffset },
+          'Empty RSS page - stopping backfill',
+        );
+        break;
+      }
+
+      // Find oldest filing date in this page
+      const oldestInPage = pageFilings.reduce((oldest, filing) => {
+        return filing.filingDate < oldest ? filing.filingDate : oldest;
+      }, pageFilings[0].filingDate);
+
+      allFilings.push(...pageFilings);
+
+      this.logger.debug(
+        {
+          formType,
+          pageCount: pageCount + 1,
+          offset: currentOffset,
+          filingsInPage: pageFilings.length,
+          oldestDate: oldestInPage,
+          cutoffDate,
+        },
+        'Fetched backfill page',
+      );
+
+      // Stop if we've reached filings before the cutoff date
+      if (oldestInPage < cutoffDate) {
+        this.logger.info(
+          {
+            formType,
+            pageCount: pageCount + 1,
+            oldestDate: oldestInPage,
+            cutoffDate,
+          },
+          'Reached cutoff date - stopping backfill',
+        );
+        break;
+      }
+
+      currentOffset += 100;
+      pageCount++;
+    }
+
+    if (pageCount >= maxPages) {
+      this.logger.warn(
+        { formType, maxPages },
+        'Max pages reached - backfill may be incomplete',
+      );
+    }
+
+    // Filter to only include filings within the lookback window
+    const filteredFilings = allFilings.filter((f) => f.filingDate >= cutoffDate);
+
+    this.logger.info(
+      {
+        formType,
+        pagesScanned: pageCount,
+        totalFetched: allFilings.length,
+        withinWindow: filteredFilings.length,
+        oldestFiling: filteredFilings.length > 0
+          ? filteredFilings.reduce((oldest, f) =>
+              f.filingDate < oldest.filingDate ? f : oldest,
+            ).filingDate
+          : null,
+      },
+      'Backfill complete for form type',
+    );
+
+    return filteredFilings;
   }
 
   /**
@@ -155,7 +263,7 @@ export class EdgarRssAdapter {
 
         // Extract company name from title (text between dash and first parenthesis)
         const nameMatch = title.match(/- (.+?) \(/);
-        const companyName = nameMatch ? nameMatch[1].trim() : null;
+        const companyName = nameMatch ? nameMatch[1].trim() : undefined;
 
         if (cik && accessionNumber && formType) {
           filings.push({

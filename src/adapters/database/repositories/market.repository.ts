@@ -22,22 +22,7 @@ export class MarketRepository {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.category && { categoryTag: filters.category }),
       ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
-      // Exclude resolved/closed markets
-      NOT: [
-        // Exclude markets that completed early with zero prices
-        {
-          AND: [
-            { completedEarly: true },
-            { yesPrice: 0 },
-            { noPrice: 0 },
-          ],
-        },
-        // Exclude markets with extreme prices (0 or 100 cents = resolved)
-        { yesPrice: 0 },
-        { yesPrice: 100 },
-        { noPrice: 0 },
-        { noPrice: 100 },
-      ],
+      NOT: this.deadMarketExclusions(),
     };
 
     const [markets, total] = await Promise.all([
@@ -76,22 +61,7 @@ export class MarketRepository {
       ...(filters.active !== undefined && { active: filters.active }),
       ...(filters.expiresAfter && { expiryDate: { gt: filters.expiresAfter } }),
       ...(searchConditions.length > 0 && { OR: searchConditions }),
-      // Exclude resolved/closed markets
-      NOT: [
-        // Exclude markets that completed early with zero prices
-        {
-          AND: [
-            { completedEarly: true },
-            { yesPrice: 0 },
-            { noPrice: 0 },
-          ],
-        },
-        // Exclude markets with extreme prices (0 or 100 cents = resolved)
-        { yesPrice: 0 },
-        { yesPrice: 100 },
-        { noPrice: 0 },
-        { noPrice: 100 },
-      ],
+      NOT: this.deadMarketExclusions(),
     };
 
     const [markets, total] = await Promise.all([
@@ -202,6 +172,53 @@ export class MarketRepository {
     });
 
     return this.toModel(upserted);
+  }
+
+  /**
+   * Centralised exclusion list for markets that are resolved or effectively
+   * non-tradeable.  Used by both findMany() and searchMarkets() so the rules
+   * stay in one place.
+   *
+   * Filter categories (all prices are in cents, 0-100):
+   *
+   * 1. Exact resolution — price is literally 0 or 100.  Kept as individual
+   *    checks because either price alone is conclusive even when the other
+   *    outcome's price is null (not yet synced).
+   *
+   * 2. Early completion — market was explicitly closed early and both prices
+   *    were zeroed out by the settlement system.
+   *
+   * 3. Effectively resolved — prices have drifted to the edges but the market
+   *    was never officially marked resolved (common with stale Gamma API sync).
+   *    Both yesPrice AND noPrice must be in the extreme range simultaneously
+   *    so that legitimate low-probability markets (e.g. yesPrice = 1, noPrice = 50)
+   *    are NOT accidentally hidden.  The compound check mirrors the spec's
+   *    requirement: (bestBid ≤ 0.01 AND bestAsk ≥ 0.99) OR vice-versa.
+   *
+   * Intentionally NOT implemented here:
+   *   - Stale-market filter (lastUpdated threshold).  Long-dated prediction
+   *     markets may have weeks of inactivity while remaining tradeable.
+   *     A stale filter should be opt-in via a query parameter if ever needed.
+   */
+  private deadMarketExclusions(): Prisma.MarketWhereInput[] {
+    return [
+      // --- exact resolution (single-field) ---
+      { yesPrice: 0 },
+      { yesPrice: 100 },
+      { noPrice: 0 },
+      { noPrice: 100 },
+
+      // --- early completion with zeroed prices ---
+      { AND: [{ completedEarly: true }, { yesPrice: 0 }, { noPrice: 0 }] },
+
+      // --- effectively resolved: YES worthless / NO certain ---
+      // yesPrice ≤ 1¢  AND  noPrice ≥ 99¢  →  spread ≥ 98¢ on the YES side.
+      { AND: [{ yesPrice: { lte: 1 } }, { noPrice: { gte: 99 } }] },
+
+      // --- effectively resolved: NO worthless / YES certain ---
+      // noPrice ≤ 1¢  AND  yesPrice ≥ 99¢  →  spread ≥ 98¢ on the NO side.
+      { AND: [{ noPrice: { lte: 1 } }, { yesPrice: { gte: 99 } }] },
+    ];
   }
 
   private toModel(prismaMarket: PrismaMarket): MarketRecord {

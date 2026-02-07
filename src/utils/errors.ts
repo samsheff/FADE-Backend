@@ -75,3 +75,14 @@ export class InsufficientLiquidityError extends AppError {
     );
   }
 }
+
+export class MarketNotFoundError extends AppError {
+  constructor(
+    resource: string,
+    identifier: string,
+    public readonly isOrderbookMissing: boolean = false,
+  ) {
+    const message = `${resource} ${identifier} not found in CLOB API`;
+    super(message, 'MARKET_NOT_FOUND', 404);
+  }
+}

@@ -126,6 +126,13 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default('5000'),
 
+  // Market Data Management
+  AUTO_DEACTIVATE_CLOSED_MARKETS: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('false'),
+
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });

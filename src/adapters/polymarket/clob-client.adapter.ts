@@ -1,6 +1,6 @@
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
-import { ExternalApiError } from '../../utils/errors.js';
+import { ExternalApiError, MarketNotFoundError } from '../../utils/errors.js';
 import { Market } from '../../types/market.types.js';
 import { Orderbook, OrderbookLevel } from '../../types/market.types.js';
 
@@ -115,6 +115,10 @@ export class PolymarketClobAdapter {
       const response = await fetch(url);
 
       if (!response.ok) {
+        // Detect 404 specifically - orderbook not found (market likely closed)
+        if (response.status === 404) {
+          throw new MarketNotFoundError('Orderbook', tokenId, true);
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -135,6 +139,11 @@ export class PolymarketClobAdapter {
         ),
       };
     } catch (error) {
+      // Re-throw MarketNotFoundError without wrapping
+      if (error instanceof MarketNotFoundError) {
+        throw error;
+      }
+
       this.logger.error({ error, tokenId }, 'Failed to fetch orderbook from Polymarket');
       throw new ExternalApiError(
         'Polymarket CLOB',

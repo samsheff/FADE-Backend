@@ -5,6 +5,7 @@ import { TradeEventRepository } from '../../adapters/database/repositories/trade
 import { PolymarketClobAdapter } from '../../adapters/polymarket/clob-client.adapter.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
+import { MarketNotFoundError } from '../../utils/errors.js';
 import { MarketDataPubSub } from './market-pubsub.service.js';
 import { OrderbookState } from './orderbook-state.js';
 import { PolymarketCLOBWebSocketClient } from './polymarket-clob-ws.client.js';
@@ -77,9 +78,14 @@ export class MarketDataStreamService {
 
     let subscriptionCount = 0;
     let marketsWithoutTokens = 0;
+    let marketsWithoutOrderbooks = 0;
+    const marketsToDeactivate: string[] = [];
 
     for (const market of activeMarkets) {
       let hasAnyToken = false;
+      let hasAnyOrderbook = false;
+      let missingOrderbookCount = 0;
+
       for (const outcome of ['YES', 'NO'] as const) {
         const tokenId = market.tokens[outcome];
         if (!tokenId) {
@@ -87,8 +93,21 @@ export class MarketDataStreamService {
         }
         hasAnyToken = true;
         const key = this.orderbookKey(market.id, outcome);
+
         if (!this.subscriptionKeys.has(key)) {
-          await this.seedOrderbook(market.id, outcome, tokenId);
+          // Attempt to seed orderbook - returns false if not found
+          const seeded = await this.seedOrderbook(market.id, outcome, tokenId);
+
+          if (!seeded) {
+            missingOrderbookCount++;
+            this.logger.debug(
+              { marketId: market.id.slice(0, 8), outcome },
+              'Skipping WebSocket subscription - orderbook unavailable',
+            );
+            continue; // Skip subscription for this outcome
+          }
+
+          hasAnyOrderbook = true;
           this.wsClient.subscribe({
             marketId: market.id,
             outcome,
@@ -96,6 +115,8 @@ export class MarketDataStreamService {
           });
           this.subscriptionKeys.add(key);
           subscriptionCount++;
+        } else {
+          hasAnyOrderbook = true; // Already subscribed
         }
       }
 
@@ -111,6 +132,30 @@ export class MarketDataStreamService {
             'Market has no token IDs, skipping WebSocket subscription',
           );
         }
+      } else if (!hasAnyOrderbook && missingOrderbookCount > 0) {
+        // Market has tokens but no orderbooks - likely closed
+        marketsWithoutOrderbooks++;
+
+        // Optional: mark as inactive in database
+        if (this.env.AUTO_DEACTIVATE_CLOSED_MARKETS) {
+          marketsToDeactivate.push(market.id);
+        }
+      }
+    }
+
+    // Batch update market status
+    if (marketsToDeactivate.length > 0) {
+      this.logger.info(
+        { count: marketsToDeactivate.length },
+        'Marking markets as inactive due to missing orderbooks',
+      );
+
+      for (const marketId of marketsToDeactivate) {
+        try {
+          await this.marketRepo.update(marketId, { active: false });
+        } catch (error) {
+          this.logger.warn({ error, marketId }, 'Failed to deactivate market');
+        }
       }
     }
 
@@ -120,16 +165,18 @@ export class MarketDataStreamService {
           totalMarkets: activeMarkets.length,
           newSubscriptions: subscriptionCount,
           totalSubscriptions: this.subscriptionKeys.size,
-          skipped: marketsWithoutTokens,
+          skippedNoTokens: marketsWithoutTokens,
+          skippedNoOrderbooks: marketsWithoutOrderbooks,
         },
         'WebSocket subscriptions updated',
       );
-    } else if (marketsWithoutTokens > 0) {
+    } else if (marketsWithoutTokens > 0 || marketsWithoutOrderbooks > 0) {
       this.logger.debug(
         {
           totalMarkets: activeMarkets.length,
           totalSubscriptions: this.subscriptionKeys.size,
-          skipped: marketsWithoutTokens,
+          skippedNoTokens: marketsWithoutTokens,
+          skippedNoOrderbooks: marketsWithoutOrderbooks,
         },
         'No new markets to subscribe to',
       );
@@ -140,7 +187,7 @@ export class MarketDataStreamService {
     marketId: string,
     outcome: MarketOutcome,
     tokenId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const snapshot = await this.clobAdapter.fetchOrderbook(tokenId);
       const state = new OrderbookState();
@@ -174,8 +221,21 @@ export class MarketDataStreamService {
         midPrice: state.getMidPrice(),
         timestamp: new Date(),
       });
+
+      return true; // Success
     } catch (error) {
+      // Handle market not found (404) - expected for closed markets
+      if (error instanceof MarketNotFoundError) {
+        this.logger.info(
+          { marketId: marketId.slice(0, 8), outcome, tokenId: tokenId.slice(0, 8) },
+          'Orderbook not found in CLOB API - market likely closed or removed',
+        );
+        return false;
+      }
+
+      // Other errors (network, rate limit, etc.) - unexpected
       this.logger.warn({ error, marketId, outcome }, 'Failed to seed orderbook snapshot');
+      return false; // Conservative: skip subscription on any error
     }
   }
 

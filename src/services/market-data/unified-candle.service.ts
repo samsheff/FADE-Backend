@@ -119,17 +119,21 @@ export class UnifiedCandleService {
     }
 
     // Start the request and store the promise
-    const requestPromise = this.fetchInstrumentCandlesImpl(params);
+    const requestPromise = this.fetchInstrumentCandlesImpl(params)
+      .then((result) => {
+        // Clean up on success
+        this.inflightRequests.delete(requestKey);
+        return result;
+      })
+      .catch((error) => {
+        // Clean up on error
+        this.inflightRequests.delete(requestKey);
+        throw error;
+      });
 
     this.inflightRequests.set(requestKey, requestPromise);
 
-    try {
-      const result = await requestPromise;
-      return result;
-    } finally {
-      // Clean up the in-flight request after completion
-      this.inflightRequests.delete(requestKey);
-    }
+    return requestPromise;
   }
 
   /**

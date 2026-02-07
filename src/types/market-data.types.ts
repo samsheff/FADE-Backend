@@ -35,7 +35,7 @@ export interface TradeEventRecord {
   timestamp: Date;
 }
 
-export type CandleInterval = '1s' | '5s' | '1m' | '5m' | '15m' | '1h';
+export type CandleInterval = '1s' | '5s' | '1m' | '5m' | '15m' | '1h' | '1d';
 
 export interface Candle {
   marketId: string;

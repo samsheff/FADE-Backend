@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import WebSocket, { WebSocketServer } from 'ws';
 import { MarketDataPubSub } from '../services/market-data/market-pubsub.service.js';
 import { MarketDataService } from '../services/market-data/market-data.service.js';
+import { TradingViewStreamService } from '../services/market-data/tradingview-stream.service.js';
+import { InstrumentRepository } from '../adapters/database/repositories/instrument.repository.js';
 import { getLogger } from '../utils/logger.js';
 import { NormalizedMarketDataMessage } from '../types/market-data.types.js';
 
@@ -14,6 +16,8 @@ export class MarketRealtimeGateway {
   private wss: WebSocketServer;
   private pubsub: MarketDataPubSub;
   private marketDataService: MarketDataService;
+  private tradingViewStream: TradingViewStreamService;
+  private instrumentRepo: InstrumentRepository;
   private logger = getLogger();
   private clientSubscriptions = new Map<WebSocket, Map<string, ClientSubscription>>();
 
@@ -24,6 +28,8 @@ export class MarketRealtimeGateway {
   ) {
     this.pubsub = pubsub;
     this.marketDataService = marketDataService;
+    this.tradingViewStream = new TradingViewStreamService();
+    this.instrumentRepo = new InstrumentRepository();
     this.wss = new WebSocketServer({
       server: app.server,
       path: '/ws/markets',
@@ -65,9 +71,25 @@ export class MarketRealtimeGateway {
 
     const record = message as Record<string, unknown>;
     const type = String(record.type || '');
+    const channelType = String(record.channel || '');
+
+    // Check if this is an instrument subscription (new)
+    const instrumentId = String(record.instrumentId || '');
+    if (instrumentId) {
+      if (type === 'subscribe') {
+        this.subscribeInstrument(socket, instrumentId, channelType);
+        return;
+      }
+      if (type === 'unsubscribe') {
+        this.unsubscribeInstrument(socket, instrumentId, channelType);
+        return;
+      }
+      return;
+    }
+
+    // Otherwise, handle as market subscription (existing logic)
     const marketId = String(record.marketId || '');
     const outcome = String(record.outcome || '').toUpperCase();
-    const channelType = String(record.channel || '');
 
     if (!marketId || !channelType || (outcome !== 'YES' && outcome !== 'NO')) {
       socket.send(
@@ -79,7 +101,7 @@ export class MarketRealtimeGateway {
             marketId: marketId || 'missing',
             outcome: outcome || 'missing',
             channelType: channelType || 'missing',
-            expected: 'outcome must be "YES" or "NO"',
+            expected: 'outcome must be "YES" or "NO" for markets, or provide instrumentId',
           },
         }),
       );
@@ -197,6 +219,103 @@ export class MarketRealtimeGateway {
     if (channelType === 'price') {
       return `market:${marketId}:price`;
     }
+    return null;
+  }
+
+  // ── Instrument subscription handlers ────────────────────────────────────
+
+  private subscribeInstrument(socket: WebSocket, instrumentId: string, channelType: string): void {
+    const channel = this.instrumentChannelFor(instrumentId, channelType);
+    if (!channel) {
+      socket.send(
+        JSON.stringify({
+          type: 'error',
+          code: 'INVALID_CHANNEL',
+          message: `Invalid channel type for instrument: ${channelType}`,
+        }),
+      );
+      return;
+    }
+
+    const subscriptions = this.clientSubscriptions.get(socket);
+    const subscriptionKey = channel;
+    if (!subscriptions || subscriptions.has(subscriptionKey)) {
+      return;
+    }
+
+    // Subscribe to TradingView stream if not already active
+    if (!this.tradingViewStream.hasSubscription(instrumentId)) {
+      this.startInstrumentStream(instrumentId).catch((err) =>
+        this.logger.error({ err, instrumentId }, 'Failed to start instrument stream'),
+      );
+    }
+
+    // Subscribe to pubsub channel
+    const unsubscribe = this.pubsub.subscribe(channel, (event: any) => {
+      socket.send(
+        JSON.stringify({
+          type: channelType,
+          instrumentId,
+          payload: event,
+        }),
+      );
+    });
+
+    subscriptions.set(subscriptionKey, { channel, unsubscribe });
+
+    this.logger.info({ instrumentId, channel }, 'Client subscribed to instrument channel');
+  }
+
+  private async startInstrumentStream(instrumentId: string): Promise<void> {
+    const instrument = await this.instrumentRepo.findById(instrumentId);
+    if (!instrument) {
+      this.logger.warn({ instrumentId }, 'Instrument not found for streaming');
+      return;
+    }
+
+    this.logger.info({ instrumentId, symbol: instrument.symbol }, 'Starting TradingView stream');
+
+    this.tradingViewStream.subscribeToSymbol(instrumentId, instrument.symbol, (update) => {
+      // Publish to pubsub so all connected clients receive it
+      const channel = `instrument:${instrumentId}:price`;
+      this.pubsub.publish(channel, {
+        type: 'price_update',
+        price: update.price,
+        bidPrice: update.bidPrice,
+        askPrice: update.askPrice,
+        timestamp: update.timestamp,
+      });
+    });
+  }
+
+  private unsubscribeInstrument(
+    socket: WebSocket,
+    instrumentId: string,
+    channelType: string,
+  ): void {
+    const channel = this.instrumentChannelFor(instrumentId, channelType);
+    if (!channel) {
+      return;
+    }
+
+    const subscriptions = this.clientSubscriptions.get(socket);
+    const subscriptionKey = channel;
+    const subscription = subscriptions?.get(subscriptionKey);
+    if (!subscription) {
+      return;
+    }
+
+    subscription.unsubscribe();
+    subscriptions?.delete(subscriptionKey);
+
+    this.logger.info({ instrumentId, channel }, 'Client unsubscribed from instrument channel');
+  }
+
+  private instrumentChannelFor(instrumentId: string, channelType: string): string | null {
+    if (channelType === 'price') {
+      return `instrument:${instrumentId}:price`;
+    }
+    // Future: add 'trades', 'orderbook' if needed
     return null;
   }
 }

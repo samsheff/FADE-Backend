@@ -445,3 +445,35 @@ model EdgarUniverseSync {
   @@index([status])
   @@map("edgar_universe_syncs")
 }
+
+// ============================================================================
+// CANDLE STORAGE (POLYMORPHIC: MARKETS + INSTRUMENTS)
+// ============================================================================
+
+model Candle {
+  id           String   @id @default(uuid())
+
+  // Polymorphic FKs (exactly one must be non-null)
+  marketId     String?  @map("market_id")
+  instrumentId String?  @map("instrument_id")
+
+  interval     String   // "1s", "5s", "1m", "5m", "15m", "1h", "1d"
+  outcome      String?  // NULL for instruments, "YES"/"NO" for markets
+
+  open         Decimal  @db.Decimal(20, 10)
+  high         Decimal  @db.Decimal(20, 10)
+  low          Decimal  @db.Decimal(20, 10)
+  close        Decimal  @db.Decimal(20, 10)
+  volume       Decimal  @db.Decimal(20, 10) @default(0)
+
+  timestamp    DateTime
+  endTime      DateTime @map("end_time")
+
+  source       String   // "polymarket", "tradingview", "manual"
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([marketId, instrumentId, interval, outcome, timestamp, source])
+  @@index([marketId, interval, timestamp])
+  @@index([instrumentId, interval, timestamp])
+  @@map("candles")
+}

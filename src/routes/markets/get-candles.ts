@@ -3,7 +3,7 @@ import { CandleAggregator } from '../../services/market-data/candle-aggregator.s
 import { CandleInterval, MarketOutcome } from '../../types/market-data.types.js';
 import { ValidationError } from '../../utils/errors.js';
 
-const INTERVALS: CandleInterval[] = ['1s', '5s', '1m', '5m', '15m', '1h'];
+const INTERVALS: CandleInterval[] = ['1s', '5s', '1m', '5m', '15m', '1h', '1d'];
 
 function parseTimestamp(value: string): Date {
   const asNumber = Number(value);
@@ -28,6 +28,8 @@ function intervalToMs(interval: CandleInterval): number {
       return 900_000;
     case '1h':
       return 3_600_000;
+    case '1d':
+      return 86_400_000;
   }
 }
 

@@ -20,9 +20,23 @@ export class SignalService {
    */
   async findSignals(filters: SignalFilters): Promise<{
     signals: SignalRecord[];
+    instruments: Record<string, any>;
     total: number;
   }> {
-    return this.signalRepo.findActiveSignals(filters);
+    const { signals, total } = await this.signalRepo.findActiveSignals(filters);
+
+    // Load associated instruments
+    const instrumentIds = [...new Set(signals.map((s) => s.instrumentId))];
+    const instruments: Record<string, any> = {};
+
+    for (const id of instrumentIds) {
+      const instrument = await this.instrumentRepo.findById(id);
+      if (instrument) {
+        instruments[id] = instrument;
+      }
+    }
+
+    return { signals, instruments, total };
   }
 
   /**

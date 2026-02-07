@@ -156,3 +156,292 @@ model AuthNonce {
   @@index([expiresAt])
   @@map("auth_nonces")
 }
+
+// ============================================================================
+// MULTI-INSTRUMENT SUPPORT
+// ============================================================================
+
+enum InstrumentType {
+  EQUITY
+  OPTION
+  FUTURE
+}
+
+enum InstrumentStatus {
+  ACTIVE
+  SUSPENDED
+  DELISTED
+  HALTED
+}
+
+model Instrument {
+  id               String           @id @default(uuid())
+  type             InstrumentType
+  status           InstrumentStatus @default(ACTIVE)
+
+  // Identity
+  symbol           String
+  name             String
+  exchange         String?
+
+  // Pricing (generic - not YES/NO)
+  lastPrice        Decimal?         @map("last_price")
+  bidPrice         Decimal?         @map("bid_price")
+  askPrice         Decimal?         @map("ask_price")
+
+  // Metadata
+  currency         String           @default("USD")
+  lotSize          Decimal          @default(1) @map("lot_size")
+
+  // Tradability
+  tradeable        Boolean          @default(true)
+  shortable        Boolean          @default(false)
+  optionsAvailable Boolean          @default(false) @map("options_available")
+
+  // Issuer Lifecycle (EDGAR Universe Discovery)
+  isActive         Boolean          @default(true) @map("is_active")
+  firstSeenAt      DateTime?        @map("first_seen_at")
+  lastFilingAt     DateTime?        @map("last_filing_at")
+  metadataSource   String?          @map("metadata_source") // 'EDGAR', 'MANUAL', etc.
+  formerNames      Json?            @map("former_names") // Array of historical names
+
+  // Timestamps
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  identifiers      InstrumentIdentifier[]
+  signals          InstrumentSignal[]
+
+  @@unique([type, symbol, exchange])
+  @@index([status])
+  @@index([symbol])
+  @@index([isActive])
+  @@index([lastFilingAt])
+  @@index([firstSeenAt])
+  @@map("instruments")
+}
+
+enum IdentifierType {
+  CIK
+  CUSIP
+  ISIN
+  FIGI
+  TICKER
+}
+
+model InstrumentIdentifier {
+  id           String         @id @default(uuid())
+  instrumentId String         @map("instrument_id")
+  type         IdentifierType
+  value        String
+
+  instrument   Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, type])
+  @@index([type, value])
+  @@map("instrument_identifiers")
+}
+
+// ============================================================================
+// SEC EDGAR FILING STORAGE
+// ============================================================================
+
+enum FilingType {
+  FORM_8K
+  FORM_10Q
+  FORM_10K
+  FORM_424B5
+  FORM_S3
+  ATM_FILING
+  PROXY_DEF14A
+  OTHER
+}
+
+enum FilingStatus {
+  PENDING
+  DOWNLOADING
+  DOWNLOADED
+  PARSED
+  ENRICHED
+  FAILED
+}
+
+model Filing {
+  id              String        @id @default(uuid())
+
+  // SEC Identity
+  accessionNumber String        @unique @map("accession_number")
+  cik             String
+  filingType      FilingType    @map("filing_type")
+  filingDate      DateTime      @map("filing_date")
+
+  // Status & Storage
+  status          FilingStatus  @default(PENDING)
+  storagePath     String?       @map("storage_path")
+  contentHash     String?       @map("content_hash")
+
+  // Metadata
+  companyName     String?       @map("company_name")
+  formType        String        @map("form_type")
+  reportDate      DateTime?     @map("report_date")
+
+  // Processing
+  errorMessage    String?       @map("error_message")
+  downloadedAt    DateTime?     @map("downloaded_at")
+  parsedAt        DateTime?     @map("parsed_at")
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  parsedContent   FilingContent?
+  facts           FilingFact[]
+  signals         InstrumentSignal[]
+
+  @@index([cik, filingDate])
+  @@index([status])
+  @@index([filingType])
+  @@map("filings")
+}
+
+model FilingContent {
+  id        String   @id @default(uuid())
+  filingId  String   @unique @map("filing_id")
+
+  fullText  String   @map("full_text") @db.Text
+  sections  Json?
+  exhibits  Json?
+
+  wordCount Int      @default(0) @map("word_count")
+  parsedAt  DateTime @default(now()) @map("parsed_at")
+
+  filing    Filing   @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@map("filing_contents")
+}
+
+// ============================================================================
+// FACT EXTRACTION
+// ============================================================================
+
+enum FactType {
+  ATM_PROGRAM
+  SHELF_REGISTRATION
+  CONVERTIBLE_DEBT
+  REVERSE_SPLIT
+  GOING_CONCERN
+  LIQUIDITY_STRESS
+  EQUITY_RAISE
+  DIRECTOR_RESIGNATION
+  COVENANT_BREACH
+  RESTATEMENT
+}
+
+model FilingFact {
+  id          String    @id @default(uuid())
+  filingId    String    @map("filing_id")
+  factType    FactType  @map("fact_type")
+
+  data        Json
+  evidence    String?   @db.Text
+  confidence  Decimal?  @default(1.0)
+
+  extractedAt DateTime  @default(now()) @map("extracted_at")
+
+  filing      Filing    @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@index([filingId])
+  @@index([factType])
+  @@map("filing_facts")
+}
+
+// ============================================================================
+// SIGNAL COMPUTATION
+// ============================================================================
+
+enum SignalType {
+  DILUTION_RISK
+  TOXIC_FINANCING_RISK
+  DISTRESS_RISK
+  VOLATILITY_SPIKE
+}
+
+enum SignalSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model InstrumentSignal {
+  id           String         @id @default(uuid())
+  instrumentId String         @map("instrument_id")
+  signalType   SignalType     @map("signal_type")
+  severity     SignalSeverity
+
+  score        Decimal
+  reason       String         @db.Text
+
+  evidenceFacts Json          @map("evidence_facts")
+  sourceFiling  String?       @map("source_filing_id")
+
+  computedAt   DateTime       @default(now()) @map("computed_at")
+  expiresAt    DateTime?      @map("expires_at")
+
+  instrument   Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  filing       Filing?        @relation(fields: [sourceFiling], references: [id], onDelete: SetNull)
+
+  @@index([instrumentId, signalType])
+  @@index([severity])
+  @@index([computedAt])
+  @@map("instrument_signals")
+}
+
+// ============================================================================
+// EDGAR SYNC TRACKING
+// ============================================================================
+
+model EdgarSyncWatermark {
+  id             String   @id @default(uuid())
+  cik            String   @unique
+  lastSyncedAt   DateTime @map("last_synced_at")
+  lastFilingDate DateTime @map("last_filing_date")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([lastFilingDate])
+  @@map("edgar_sync_watermarks")
+}
+
+// ============================================================================
+// EDGAR UNIVERSE DISCOVERY TRACKING
+// ============================================================================
+
+model EdgarUniverseSync {
+  id                String   @id @default(uuid())
+
+  // Sync metadata
+  syncStartedAt     DateTime @map("sync_started_at")
+  syncCompletedAt   DateTime @map("sync_completed_at")
+  status            String   // 'in_progress', 'completed', 'failed'
+
+  // Discovery metrics
+  totalIssuers      Int      @default(0) @map("total_issuers")
+  newIssuers        Int      @default(0) @map("new_issuers")
+  updatedIssuers    Int      @default(0) @map("updated_issuers")
+
+  // Source metadata
+  sourceUrl         String?  @map("source_url")
+  sourceChecksum    String?  @map("source_checksum")
+
+  // Error tracking
+  errorMessage      String?  @map("error_message")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([syncCompletedAt])
+  @@index([status])
+  @@map("edgar_universe_syncs")
+}

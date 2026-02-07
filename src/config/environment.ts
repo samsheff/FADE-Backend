@@ -133,6 +133,80 @@ const envSchema = z.object({
     .pipe(z.boolean())
     .default('false'),
 
+  // ============================================================================
+  // EDGAR Worker Configuration
+  // ============================================================================
+
+  EDGAR_WORKER_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('false'),
+
+  EDGAR_SYNC_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('3600000'), // 1 hour
+
+  EDGAR_UNIVERSE_SYNC_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('86400000'), // 24 hours
+
+  EDGAR_STORAGE_PATH: z
+    .string()
+    .default('./storage/edgar'),
+
+  EDGAR_API_USER_AGENT: z
+    .string()
+    .default('Trading Terminal Bot (contact@example.com)'),
+
+  EDGAR_API_RATE_LIMIT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('100'), // 10 req/sec max per SEC guidelines
+
+  EDGAR_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('10'),
+
+  // Discovery mode settings
+  EDGAR_DISCOVERY_MODE: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
+
+  EDGAR_DISCOVERY_LOOKBACK_DAYS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('30'), // Scan last 30 days of filings
+
+  // Signal computation thresholds (configurable)
+  SIGNAL_DILUTION_SHELF_THRESHOLD_PCT: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default('20'), // Shelf > 20% of market cap = HIGH
+
+  SIGNAL_TOXIC_PRICE_THRESHOLD: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default('2'), // Stock price < $2 = risk factor
+
+  SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('12'),
+
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });

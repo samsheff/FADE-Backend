@@ -5,6 +5,10 @@ import { getCandlesRoutes } from './markets/get-candles.js';
 import { getPositionsRoutes } from './positions/get-positions.js';
 import { prepareTradeRoutes } from './trades/prepare-trade.js';
 import { backfillRoutes } from './admin/backfill.routes.js';
+import { instrumentsRoutes } from './instruments/instruments.routes.js';
+import { signalsRoutes } from './signals/signals.routes.js';
+import { filingsRoutes } from './filings/filings.routes.js';
+import { universeRoutes } from './universe/universe.routes.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Auth routes
@@ -22,4 +26,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Admin routes
   await app.register(backfillRoutes, { prefix: '/api/v1/admin' });
+
+  // EDGAR routes
+  await app.register(instrumentsRoutes, { prefix: '/api/v1/instruments' });
+  await app.register(signalsRoutes, { prefix: '/api/v1/signals' });
+  await app.register(filingsRoutes, { prefix: '/api/v1/filings' });
+  await app.register(universeRoutes, { prefix: '/api/v1/universe' });
 }

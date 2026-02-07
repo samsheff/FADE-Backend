@@ -5,6 +5,8 @@ import { createPrismaClient, disconnectPrisma } from '../adapters/database/clien
 import { registerRoutes } from '../routes/index.js';
 import { MarketSyncJob } from '../jobs/market-sync.job.js';
 import { PositionUpdateJob } from '../jobs/position-update.job.js';
+import { EdgarSyncJob } from '../jobs/edgar-sync.job.js';
+import { EdgarUniverseDiscoveryJob } from '../jobs/edgar-universe-discovery.job.js';
 import { MarketDataPubSub } from '../services/market-data/market-pubsub.service.js';
 import { MarketDataStreamService } from '../services/market-data/market-data-stream.service.js';
 import { MarketDataService } from '../services/market-data/market-data.service.js';
@@ -67,6 +69,31 @@ async function start(): Promise<void> {
     positionUpdateJob.start();
     logger.info('✅ Background jobs started');
 
+    // Start EDGAR worker if enabled
+    let edgarSyncJob: EdgarSyncJob | null = null;
+    let edgarUniverseJob: EdgarUniverseDiscoveryJob | null = null;
+    if (env.EDGAR_WORKER_ENABLED) {
+      // Run universe discovery first to populate instruments before filing sync
+      logger.info('🌐 Starting EDGAR universe discovery (will complete before filing sync)...');
+      edgarUniverseJob = new EdgarUniverseDiscoveryJob();
+
+      try {
+        // Run initial universe sync and wait for completion (~26 seconds for ~10k issuers)
+        await edgarUniverseJob.start();
+        logger.info('✅ Universe discovery complete, instruments populated');
+      } catch (error) {
+        logger.error({ error }, 'Failed to complete initial universe discovery');
+      }
+
+      // Now start EDGAR filing sync (instruments are now available for linking)
+      logger.info('🔍 Starting EDGAR filing sync job...');
+      edgarSyncJob = new EdgarSyncJob();
+      edgarSyncJob.start().catch((error) => {
+        logger.error({ error }, 'Failed to start EDGAR filing sync job');
+      });
+      logger.info('✅ EDGAR filing sync job started and scheduled');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`${signal} received, shutting down gracefully...`);
@@ -76,6 +103,16 @@ async function start(): Promise<void> {
       positionUpdateJob.stop();
       streamService.stop();
       realtimeGateway.close();
+
+      if (edgarSyncJob) {
+        logger.info('Stopping EDGAR sync job...');
+        edgarSyncJob.stop();
+      }
+
+      if (edgarUniverseJob) {
+        logger.info('Stopping EDGAR universe discovery job...');
+        edgarUniverseJob.stop();
+      }
 
       await app.close();
       await disconnectPrisma();

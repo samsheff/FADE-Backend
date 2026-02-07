@@ -43,6 +43,8 @@ export class UnifiedCandleService {
   private tradingViewData: TradingViewDataService;
   private candleRepo: CandleRepository;
   private instrumentRepo: InstrumentRepository;
+  private inflightRequests: Map<string, Promise<CandleOutput[]>> = new Map();
+
   private get logger() {
     return getLogger();
   }
@@ -97,8 +99,43 @@ export class UnifiedCandleService {
 
   /**
    * Instrument candles: fetch from TradingView, cache in DB
+   * Uses request coalescing to prevent duplicate concurrent fetches
    */
   private async getInstrumentCandles(params: UnifiedCandleParams): Promise<CandleOutput[]> {
+    const { instrumentId, interval, from, to, limit } = params;
+
+    if (!instrumentId) {
+      throw new Error('instrumentId is required for instrument candles');
+    }
+
+    // Create a unique key for this request
+    const requestKey = `${instrumentId}_${interval}_${from.getTime()}_${to.getTime()}`;
+
+    // Check if this request is already in-flight
+    const inflightRequest = this.inflightRequests.get(requestKey);
+    if (inflightRequest) {
+      this.logger.debug({ instrumentId, interval }, 'Coalescing duplicate concurrent request');
+      return inflightRequest;
+    }
+
+    // Start the request and store the promise
+    const requestPromise = this.fetchInstrumentCandlesImpl(params);
+
+    this.inflightRequests.set(requestKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      // Clean up the in-flight request after completion
+      this.inflightRequests.delete(requestKey);
+    }
+  }
+
+  /**
+   * Internal implementation of instrument candle fetching
+   */
+  private async fetchInstrumentCandlesImpl(params: UnifiedCandleParams): Promise<CandleOutput[]> {
     const { instrumentId, interval, from, to, limit } = params;
 
     if (!instrumentId) {

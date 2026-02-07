@@ -25,13 +25,27 @@ export class CandleRepository {
       return;
     }
 
-    this.logger.debug({ count: candles.length }, 'Upserting candles');
+    // Deduplicate candles by unique constraint fields to avoid race conditions
+    // when multiple requests fetch the same data concurrently
+    const uniqueCandles = Array.from(
+      candles.reduce((map, candle) => {
+        const key = `${candle.instrumentId}_${candle.interval}_${candle.timestamp.getTime()}_${candle.source}`;
+        // Keep the last occurrence (most recent data)
+        map.set(key, candle);
+        return map;
+      }, new Map<string, TradingViewCandle>()).values()
+    );
+
+    this.logger.debug(
+      { total: candles.length, unique: uniqueCandles.length },
+      'Upserting candles (deduplicated)'
+    );
 
     try {
       // Use transaction with sequential upserts
       // (Prisma has issues with nullable fields in compound unique constraints)
       await prisma.$transaction(async (tx) => {
-        for (const candle of candles) {
+        for (const candle of uniqueCandles) {
           // Check if candle exists
           const existing = await tx.candle.findFirst({
             where: {

@@ -182,17 +182,24 @@ const envSchema = z.object({
     .pipe(z.boolean())
     .default('true'),
 
-  EDGAR_DISCOVERY_LOOKBACK_DAYS: z
+  // Historical Backfill Configuration
+  EDGAR_BACKFILL_ENABLED: z
     .string()
-    .transform(Number)
-    .pipe(z.number().int().positive())
-    .default('30'), // Scan last 30 days of filings
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
 
-  EDGAR_MAX_BACKFILL_PAGES: z
+  EDGAR_BACKFILL_LOOKBACK_DAYS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('100'), // 100 pages × 100 filings = 10k max per form type
+    .default('90'), // 90 days of historical data
+
+  EDGAR_BACKFILL_MAX_PAGES_PER_FORM: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('50'), // 50 pages × 100 = 5,000 filings max per form type
 
   // Signal computation thresholds (configurable)
   SIGNAL_DILUTION_SHELF_THRESHOLD_PCT: z

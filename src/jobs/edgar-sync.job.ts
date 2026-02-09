@@ -7,8 +7,14 @@ import { getEnvironment } from '../config/environment.js';
 import { getLogger } from '../utils/logger.js';
 
 /**
- * EDGAR Sync Job
- * Orchestrates the full pipeline: discover → download → parse → extract → compute signals
+ * EDGAR Sync Job (Dual-Path Orchestration)
+ *
+ * Orchestrates two ingestion paths:
+ * 1. Historical Backfill (runs once on startup) → SEC Historical API
+ * 2. Real-Time Discovery (periodic polling) → RSS feeds
+ *
+ * Both paths feed into the same pipeline:
+ * discover → download → parse → extract → compute signals
  */
 export class EdgarSyncJob {
   private indexer: EdgarIndexerService;
@@ -19,6 +25,7 @@ export class EdgarSyncJob {
   private logger;
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private hasRunBackfill = false; // In-memory flag for one-time backfill
 
   constructor() {
     this.indexer = new EdgarIndexerService();
@@ -31,7 +38,9 @@ export class EdgarSyncJob {
 
   /**
    * Start the EDGAR sync job
-   * Runs initial sync then schedules periodic runs
+   *
+   * Runs historical backfill ONCE on first startup,
+   * then continues with periodic real-time RSS polling.
    */
   async start(): Promise<void> {
     const env = getEnvironment();
@@ -40,21 +49,31 @@ export class EdgarSyncJob {
         interval: env.EDGAR_SYNC_INTERVAL_MS,
         batchSize: env.EDGAR_BATCH_SIZE,
         discoveryMode: env.EDGAR_DISCOVERY_MODE,
+        backfillEnabled: env.EDGAR_BACKFILL_ENABLED,
+        backfillLookbackDays: env.EDGAR_BACKFILL_LOOKBACK_DAYS,
       },
       'Starting EDGAR sync job',
     );
 
-    // Initial run
+    // Run backfill ONCE on first startup
+    if (env.EDGAR_BACKFILL_ENABLED && !this.hasRunBackfill) {
+      this.logger.info('Starting EDGAR historical backfill...');
+      await this.runBackfill();
+      this.hasRunBackfill = true;
+      this.logger.info('EDGAR historical backfill complete');
+    }
+
+    // Initial real-time run
     await this.run();
 
-    // Schedule periodic runs
+    // Schedule periodic real-time runs
     this.intervalId = setInterval(() => {
       this.run().catch((error) => {
         this.logger.error({ error }, 'EDGAR sync job error');
       });
     }, env.EDGAR_SYNC_INTERVAL_MS);
 
-    this.logger.info('EDGAR sync job started');
+    this.logger.info('EDGAR sync job started (real-time polling)');
   }
 
   /**
@@ -69,7 +88,83 @@ export class EdgarSyncJob {
   }
 
   /**
-   * Run one iteration of the pipeline
+   * Run historical backfill (one-time on startup)
+   *
+   * Stage 1: Historical discovery via SEC API
+   * Stages 2-5: Process backfilled filings (download/parse/extract/compute)
+   */
+  private async runBackfill(): Promise<void> {
+    const env = getEnvironment();
+    const startTime = Date.now();
+
+    try {
+      this.logger.info({ mode: 'BACKFILL' }, 'Starting historical backfill iteration');
+
+      const stats = {
+        newFilings: 0,
+        downloaded: 0,
+        parsed: 0,
+        factsExtracted: 0,
+        signals: 0,
+      };
+
+      // Stage 1: Historical backfill discovery
+      const discoveryStart = Date.now();
+      stats.newFilings = await this.indexer.backfillHistoricalFilings(
+        env.EDGAR_BACKFILL_LOOKBACK_DAYS,
+      );
+      const discoveryDuration = Date.now() - discoveryStart;
+
+      this.logger.info(
+        {
+          mode: 'BACKFILL',
+          count: stats.newFilings,
+          durationMs: discoveryDuration,
+          lookbackDays: env.EDGAR_BACKFILL_LOOKBACK_DAYS,
+        },
+        'Historical discovery complete',
+      );
+
+      // Stages 2-5: Process backfilled filings
+      stats.downloaded = await this.downloader.processPendingFilings(
+        env.EDGAR_BATCH_SIZE,
+      );
+      this.logger.info({ mode: 'BACKFILL', count: stats.downloaded }, 'Download complete');
+
+      stats.parsed = await this.parser.parseDownloadedFilings(
+        env.EDGAR_BATCH_SIZE,
+      );
+      this.logger.info({ mode: 'BACKFILL', count: stats.parsed }, 'Parsing complete');
+
+      stats.factsExtracted = await this.factExtractor.extractFactsFromParsedFilings(
+        env.EDGAR_BATCH_SIZE,
+      );
+      this.logger.info({ mode: 'BACKFILL', count: stats.factsExtracted }, 'Fact extraction complete');
+
+      stats.signals = await this.signalComputer.computeSignals();
+      this.logger.info({ mode: 'BACKFILL', count: stats.signals }, 'Signal computation complete');
+
+      const duration = Date.now() - startTime;
+
+      this.logger.info(
+        {
+          mode: 'BACKFILL',
+          stats,
+          durationMs: duration,
+        },
+        'Historical backfill iteration complete',
+      );
+    } catch (error) {
+      this.logger.error({ error, mode: 'BACKFILL' }, 'Historical backfill iteration failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Run one iteration of real-time pipeline
+   *
+   * Stage 1: Real-time RSS discovery
+   * Stages 2-5: Process new filings (download/parse/extract/compute)
    */
   private async run(): Promise<void> {
     if (this.isRunning) {
@@ -82,7 +177,7 @@ export class EdgarSyncJob {
     const startTime = Date.now();
 
     try {
-      this.logger.info('Starting EDGAR sync iteration');
+      this.logger.info({ mode: 'REALTIME' }, 'Starting real-time sync iteration');
 
       const stats = {
         newFilings: 0,
@@ -92,21 +187,22 @@ export class EdgarSyncJob {
         signals: 0,
       };
 
-      // Stage 1: Discovery (if enabled)
+      // Stage 1: Real-time RSS discovery (if enabled)
       if (env.EDGAR_DISCOVERY_MODE) {
         const discoveryStart = Date.now();
-        stats.newFilings = await this.indexer.discoverNewFilings();
+        stats.newFilings = await this.indexer.discoverRecentFilings();
         const discoveryDuration = Date.now() - discoveryStart;
 
         this.logger.info(
           {
+            mode: 'REALTIME',
             count: stats.newFilings,
             durationMs: discoveryDuration,
             filingsPerSec: stats.newFilings > 0
               ? ((stats.newFilings / discoveryDuration) * 1000).toFixed(2)
               : '0',
           },
-          'Discovery complete',
+          'Real-time discovery complete',
         );
       }
 
@@ -114,35 +210,36 @@ export class EdgarSyncJob {
       stats.downloaded = await this.downloader.processPendingFilings(
         env.EDGAR_BATCH_SIZE,
       );
-      this.logger.info({ count: stats.downloaded }, 'Download complete');
+      this.logger.info({ mode: 'REALTIME', count: stats.downloaded }, 'Download complete');
 
       // Stage 3: Parse downloaded filings
       stats.parsed = await this.parser.parseDownloadedFilings(
         env.EDGAR_BATCH_SIZE,
       );
-      this.logger.info({ count: stats.parsed }, 'Parsing complete');
+      this.logger.info({ mode: 'REALTIME', count: stats.parsed }, 'Parsing complete');
 
       // Stage 4: Extract facts from parsed filings
       stats.factsExtracted = await this.factExtractor.extractFactsFromParsedFilings(
         env.EDGAR_BATCH_SIZE,
       );
-      this.logger.info({ count: stats.factsExtracted }, 'Fact extraction complete');
+      this.logger.info({ mode: 'REALTIME', count: stats.factsExtracted }, 'Fact extraction complete');
 
       // Stage 5: Compute signals from facts
       stats.signals = await this.signalComputer.computeSignals();
-      this.logger.info({ count: stats.signals }, 'Signal computation complete');
+      this.logger.info({ mode: 'REALTIME', count: stats.signals }, 'Signal computation complete');
 
       const duration = Date.now() - startTime;
 
       this.logger.info(
         {
+          mode: 'REALTIME',
           stats,
           durationMs: duration,
         },
-        'EDGAR sync iteration complete',
+        'Real-time sync iteration complete',
       );
     } catch (error) {
-      this.logger.error({ error }, 'EDGAR sync iteration failed');
+      this.logger.error({ error, mode: 'REALTIME' }, 'Real-time sync iteration failed');
     } finally {
       this.isRunning = false;
     }

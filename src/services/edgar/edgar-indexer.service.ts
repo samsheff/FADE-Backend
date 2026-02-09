@@ -1,159 +1,265 @@
 import { EdgarRssAdapter } from '../../adapters/edgar/edgar-rss.adapter.js';
+import { EdgarHistoricalAdapter } from '../../adapters/edgar/edgar-historical.adapter.js';
 import { FilingRepository } from '../../adapters/database/repositories/filing.repository.js';
 import { InstrumentRepository } from '../../adapters/database/repositories/instrument.repository.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import { FilingMetadata } from '../../types/edgar.types.js';
 import { InstrumentType } from '../../types/instrument.types.js';
+import { RateLimiter } from '../../utils/rate-limiter.js';
 
 /**
- * EDGAR Indexer Service (Refactored for Dynamic Discovery)
+ * EDGAR Indexer Service (Dual-Path Ingestion)
  *
- * **ARCHITECTURE CHANGE**: No longer uses hardcoded CIK watchlists.
- * Instead, fetches ALL recent filings from SEC RSS feed and ingests broadly.
+ * Supports two distinct ingestion paths:
+ * 1. **Real-Time RSS** - Recent filings only (last 100 per form type)
+ * 2. **Historical Backfill** - Date-bounded queries via SEC Historical API
+ *
+ * Both paths write to the same Filing table with natural deduplication
+ * via unique accessionNumber constraint.
  *
  * Discovery Strategy:
- * 1. Fetch recent filings from SEC RSS (all companies)
- * 2. Match to issuers in database (populated by Universe Discovery)
- * 3. Create filing records for ALL filings (no pre-filtering)
- * 4. Filtering happens downstream via signal logic
+ * - Fetch ALL recent/historical filings (no pre-filtering by company)
+ * - Create filing records for all discovered filings
+ * - Filtering happens downstream via signal logic
  *
  * Benefits:
  * - Discovers new toxic financing actors automatically
- * - No manual watchlist maintenance
- * - Full EDGAR coverage
+ * - Reliable historical coverage (not limited by RSS cap)
+ * - Full EDGAR universe coverage
  * - Retroactive signal computation
  */
 export class EdgarIndexerService {
   private rssAdapter: EdgarRssAdapter;
+  private historicalAdapter: EdgarHistoricalAdapter;
   private filingRepo: FilingRepository;
   private instrumentRepo: InstrumentRepository;
+  private rateLimiter: RateLimiter;
   private logger;
 
   constructor() {
+    const env = getEnvironment();
+
+    // Share rate limiter between RSS and Historical adapters
+    this.rateLimiter = new RateLimiter(env.EDGAR_API_RATE_LIMIT_MS);
+
     this.rssAdapter = new EdgarRssAdapter();
+    this.historicalAdapter = new EdgarHistoricalAdapter(this.rateLimiter);
     this.filingRepo = new FilingRepository();
     this.instrumentRepo = new InstrumentRepository();
     this.logger = getLogger();
   }
 
   /**
-   * Discover new filings from SEC EDGAR RSS feed
+   * Discover recent filings from SEC EDGAR RSS feed (Real-Time Path)
    *
-   * **No longer filters by company** - ingests ALL recent filings.
-   * Filtering now happens post-ingestion via signals.
+   * Fetches ONLY the most recent 100 filings per form type.
+   * No pagination, no backfill - this is for real-time discovery only.
    *
-   * Form types filtered:
+   * Form types:
    * - 8-K (material events)
    * - 424B5 (prospectus supplements = shelf usage)
    * - S-3 (shelf registrations)
    * - 10-Q, 10-K (periodic reports)
-   *
-   * These cover most toxic financing and distress patterns.
    */
-  async discoverNewFilings(): Promise<number> {
-    const env = getEnvironment();
-
-    this.logger.info('Starting dynamic EDGAR filing discovery (no watchlist)');
+  async discoverRecentFilings(): Promise<number> {
+    this.logger.info({ mode: 'REALTIME' }, 'Starting real-time RSS discovery');
 
     try {
-      // Fetch ALL recent filings from RSS feed
-      // No CIK filtering - we want full universe coverage
       const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K'];
-
       const allFilings: FilingMetadata[] = [];
 
-      // Calculate cutoff date for backfill
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - env.EDGAR_DISCOVERY_LOOKBACK_DAYS);
-
-      this.logger.info(
-        {
-          lookbackDays: env.EDGAR_DISCOVERY_LOOKBACK_DAYS,
-          cutoffDate,
-          maxPagesPerType: env.EDGAR_MAX_BACKFILL_PAGES,
-        },
-        'Starting backfill discovery',
-      );
-
-      // Fetch for each form type with backfill (SEC RSS requires separate requests)
+      // Fetch recent filings (first page only, no pagination)
       for (const formType of formTypes) {
         try {
-          const filings = await this.rssAdapter.fetchFilingsWithBackfill(
-            formType,
-            cutoffDate,
-            env.EDGAR_MAX_BACKFILL_PAGES,
-          );
+          const filings = await this.rssAdapter.fetchRecentFilings({
+            formTypes: [formType],
+            limit: 100,
+            startOffset: 0,
+          });
 
           allFilings.push(...filings);
 
           this.logger.info(
-            { formType, count: filings.length },
-            'Backfill complete for form type',
+            {
+              mode: 'REALTIME',
+              formType,
+              filings: filings.length,
+              source: 'RSS',
+            },
+            'Real-time discovery complete for form type',
           );
         } catch (error) {
           this.logger.warn(
-            { formType, error },
-            'Failed to fetch filings for form type',
+            { mode: 'REALTIME', formType, error },
+            'Failed to fetch recent filings for form type',
           );
         }
       }
 
       this.logger.info(
-        { count: allFilings.length },
-        'Fetched recent filings from SEC RSS (all companies)',
+        {
+          mode: 'REALTIME',
+          count: allFilings.length,
+        },
+        'Fetched recent filings from RSS',
       );
 
       if (allFilings.length === 0) {
         return 0;
       }
 
-      // Check which filings already exist
-      const accessionNumbers = allFilings.map((f) => f.accessionNumber);
-      const existingAccessions = await this.filingRepo.findByAccessionNumbers(
-        accessionNumbers,
-      );
+      // Insert discovered filings (shared logic)
+      return await this.insertDiscoveredFilings(allFilings);
+    } catch (error) {
+      this.logger.error({ error, mode: 'REALTIME' }, 'Real-time discovery failed');
+      throw error;
+    }
+  }
 
-      // Filter for new filings
-      const newFilings = allFilings.filter(
-        (f) => !existingAccessions.includes(f.accessionNumber),
-      );
+  /**
+   * Backfill historical filings via SEC Historical Search API
+   *
+   * Uses date-bounded queries to fetch filings within a lookback window.
+   * This is the CORRECT approach for historical coverage (not RSS pagination).
+   *
+   * @param lookbackDays - Number of days to look back
+   * @returns Count of new filings inserted
+   */
+  async backfillHistoricalFilings(lookbackDays: number): Promise<number> {
+    const env = getEnvironment();
+
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - lookbackDays);
+
+    const startDateStr = EdgarHistoricalAdapter.formatDate(startDate);
+    const endDateStr = EdgarHistoricalAdapter.formatDate(endDate);
+
+    this.logger.info(
+      {
+        mode: 'BACKFILL',
+        lookbackDays,
+        dateRange: { start: startDateStr, end: endDateStr },
+        maxPagesPerForm: env.EDGAR_BACKFILL_MAX_PAGES_PER_FORM,
+      },
+      'Starting historical backfill',
+    );
+
+    try {
+      const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K'];
+      const allFilings: FilingMetadata[] = [];
+
+      // Fetch historical filings for each form type
+      for (const formType of formTypes) {
+        try {
+          this.logger.info(
+            { mode: 'BACKFILL', formType, dateRange: { start: startDateStr, end: endDateStr } },
+            'Starting backfill for form type',
+          );
+
+          // Paginate through historical API
+          for await (const filingBatch of this.historicalAdapter.fetchFilingsWithPagination(
+            formType,
+            startDateStr,
+            endDateStr,
+            env.EDGAR_BACKFILL_MAX_PAGES_PER_FORM,
+          )) {
+            allFilings.push(...filingBatch);
+          }
+
+          this.logger.info(
+            {
+              mode: 'BACKFILL',
+              formType,
+              count: allFilings.length,
+            },
+            'Backfill complete for form type',
+          );
+        } catch (error) {
+          this.logger.warn(
+            { mode: 'BACKFILL', formType, error },
+            'Failed to backfill form type',
+          );
+        }
+      }
 
       this.logger.info(
-        { total: allFilings.length, new: newFilings.length },
-        'Filtered for new filings',
+        {
+          mode: 'BACKFILL',
+          totalFilings: allFilings.length,
+        },
+        'Historical backfill discovery complete',
       );
 
-      if (newFilings.length === 0) {
+      if (allFilings.length === 0) {
         return 0;
       }
 
-      // Upsert instruments for each filing (create if issuer not in DB)
-      await this.upsertInstrumentsForFilings(newFilings);
-
-      // Batch insert new filings
-      const insertedCount = await this.filingRepo.batchInsert(
-        newFilings.map((f) => ({
-          accessionNumber: f.accessionNumber,
-          cik: f.cik,
-          filingType: f.filingType,
-          formType: f.formType,
-          filingDate: f.filingDate,
-          companyName: f.companyName,
-          reportDate: f.reportDate,
-        })),
-      );
-
-      // Update lastFilingAt for each issuer
-      await this.updateIssuerFilingDates(newFilings);
-
-      this.logger.info({ count: insertedCount }, 'Inserted new filings (dynamic discovery)');
-
-      return insertedCount;
+      // Insert discovered filings (shared logic)
+      return await this.insertDiscoveredFilings(allFilings);
     } catch (error) {
-      this.logger.error({ error }, 'Filing discovery failed');
+      this.logger.error({ error, mode: 'BACKFILL' }, 'Historical backfill failed');
       throw error;
     }
+  }
+
+  /**
+   * Insert discovered filings (shared by both real-time and backfill paths)
+   *
+   * Handles:
+   * - Deduplication via existing accession number check
+   * - Instrument upsert for new CIKs
+   * - Batch filing insertion
+   * - lastFilingAt timestamp updates
+   *
+   * @param filings - Array of filing metadata to insert
+   * @returns Count of new filings inserted
+   */
+  private async insertDiscoveredFilings(filings: FilingMetadata[]): Promise<number> {
+    // Check which filings already exist
+    const accessionNumbers = filings.map((f) => f.accessionNumber);
+    const existingAccessions = await this.filingRepo.findByAccessionNumbers(
+      accessionNumbers,
+    );
+
+    // Filter for new filings
+    const newFilings = filings.filter(
+      (f) => !existingAccessions.includes(f.accessionNumber),
+    );
+
+    this.logger.info(
+      { total: filings.length, new: newFilings.length, existing: existingAccessions.length },
+      'Filtered for new filings',
+    );
+
+    if (newFilings.length === 0) {
+      return 0;
+    }
+
+    // Upsert instruments for each filing (create if issuer not in DB)
+    await this.upsertInstrumentsForFilings(newFilings);
+
+    // Batch insert new filings
+    const insertedCount = await this.filingRepo.batchInsert(
+      newFilings.map((f) => ({
+        accessionNumber: f.accessionNumber,
+        cik: f.cik,
+        filingType: f.filingType,
+        formType: f.formType,
+        filingDate: f.filingDate,
+        companyName: f.companyName,
+        reportDate: f.reportDate,
+      })),
+    );
+
+    // Update lastFilingAt for each issuer
+    await this.updateIssuerFilingDates(newFilings);
+
+    this.logger.info({ count: insertedCount }, 'Inserted new filings');
+
+    return insertedCount;
   }
 
   /**

@@ -7,6 +7,7 @@ import { MarketSyncJob } from '../jobs/market-sync.job.js';
 import { PositionUpdateJob } from '../jobs/position-update.job.js';
 import { EdgarSyncJob } from '../jobs/edgar-sync.job.js';
 import { EdgarUniverseDiscoveryJob } from '../jobs/edgar-universe-discovery.job.js';
+import { NewsWorkerJob } from '../jobs/news-worker.job.js';
 import { SearchIndexerJob } from '../jobs/search-indexer.job.js';
 import { EntityEnrichmentJob } from '../jobs/entity-enrichment.job.js';
 import { SignalComputationJob } from '../jobs/signal-computation.job.js';
@@ -97,6 +98,17 @@ async function start(): Promise<void> {
       logger.info('✅ EDGAR filing sync job started and scheduled');
     }
 
+    // Start News worker if enabled
+    let newsWorkerJob: NewsWorkerJob | null = null;
+    if (env.NEWS_WORKER_ENABLED) {
+      logger.info('📰 Starting News worker...');
+      newsWorkerJob = new NewsWorkerJob();
+      newsWorkerJob.start().catch((error) => {
+        logger.error({ error }, 'Failed to start News worker');
+      });
+      logger.info('✅ News worker started');
+    }
+
     // Start search indexer if enabled
     let searchIndexerJob: SearchIndexerJob | null = null;
     if (env.SEARCH_INDEXER_ENABLED) {
@@ -157,6 +169,11 @@ async function start(): Promise<void> {
       if (edgarUniverseJob) {
         logger.info('Stopping EDGAR universe discovery job...');
         edgarUniverseJob.stop();
+      }
+
+      if (newsWorkerJob) {
+        logger.info('Stopping News worker...');
+        newsWorkerJob.stop();
       }
 
       if (searchIndexerJob) {

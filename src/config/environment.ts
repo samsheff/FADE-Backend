@@ -221,6 +221,67 @@ const envSchema = z.object({
     .default('12'),
 
   // ============================================================================
+  // News Worker Configuration
+  // ============================================================================
+
+  NEWS_WORKER_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('false'),
+
+  NEWS_SYNC_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('3600000'), // 1 hour
+
+  NEWS_STORAGE_PATH: z
+    .string()
+    .default('./storage/news'),
+
+  NEWS_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('20'),
+
+  NEWS_BACKFILL_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
+
+  NEWS_BACKFILL_LOOKBACK_DAYS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('7'), // 1 week of historical news
+
+  // Finnhub API Configuration
+  FINNHUB_API_KEY: z
+    .string()
+    .default(''),
+
+  FINNHUB_API_BASE_URL: z
+    .string()
+    .url()
+    .default('https://finnhub.io'),
+
+  FINNHUB_API_RATE_LIMIT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('1000'), // 1 req/sec = 60 req/min
+
+  // Signal extraction thresholds
+  SIGNAL_NEWS_MIN_CONFIDENCE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default('0.7'),
+
+  // ============================================================================
   // Entity Enrichment Configuration
   // ============================================================================
 

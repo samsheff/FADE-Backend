@@ -40,6 +40,15 @@ export class TradeExecutionService {
     validateMarketId(request.marketId);
     validateSize(request.size);
 
+    // Validate limit order parameters
+    const orderType = request.orderType || 'market';
+    if (orderType === 'limit' && !request.limitPrice) {
+      throw new ValidationError('limitPrice is required for limit orders');
+    }
+    if (request.limitPrice && parseFloat(request.limitPrice) <= 0) {
+      throw new ValidationError('limitPrice must be greater than 0');
+    }
+
     // Check market exists and is active
     const market = await this.marketRepo.findById(request.marketId);
     if (!market) {
@@ -66,6 +75,8 @@ export class TradeExecutionService {
       request.side,
       request.size,
       orderbook,
+      orderType,
+      request.limitPrice,
     );
 
     // Build unsigned transaction
@@ -82,7 +93,7 @@ export class TradeExecutionService {
     );
 
     this.logger.info(
-      { walletAddress, estimatedCost, slippage },
+      { walletAddress, estimatedCost, slippage, orderType },
       'Trade preparation completed',
     );
 
@@ -97,8 +108,24 @@ export class TradeExecutionService {
     side: 'buy' | 'sell',
     size: string,
     orderbook: { bids: Array<{ price: string; size: string }>; asks: Array<{ price: string; size: string }> },
+    orderType: 'market' | 'limit' = 'market',
+    limitPrice?: string,
   ): { estimatedCost: string; slippage: string; bestPrice: string } {
     const sizeNum = parseFloat(size);
+
+    // For limit orders, use the specified limit price
+    if (orderType === 'limit' && limitPrice) {
+      const limitPriceNum = parseFloat(limitPrice);
+      const totalCost = sizeNum * limitPriceNum;
+
+      return {
+        estimatedCost: totalCost.toFixed(2),
+        slippage: '0.00', // No slippage for limit orders
+        bestPrice: limitPrice,
+      };
+    }
+
+    // For market orders, walk the orderbook
     const levels = side === 'buy' ? orderbook.asks : orderbook.bids;
 
     if (levels.length === 0) {

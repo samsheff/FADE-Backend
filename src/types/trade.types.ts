@@ -22,6 +22,8 @@ export interface PrepareTradeRequest {
   outcome: Outcome;
   side: TradeSide;
   size: string;
+  orderType?: 'market' | 'limit'; // Default: 'market' (backward compatible)
+  limitPrice?: string;             // Required when orderType === 'limit'
 }
 
 export interface UnsignedTransaction {

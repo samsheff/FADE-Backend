@@ -42,6 +42,12 @@ export async function prepareTradeRoutes(app: FastifyInstance): Promise<void> {
               description: 'Buy or sell',
             },
             size: { type: 'string', description: 'Size in outcome tokens' },
+            orderType: {
+              type: 'string',
+              enum: ['market', 'limit'],
+              description: 'Order type (default: market)',
+            },
+            limitPrice: { type: 'string', description: 'Limit price (required for limit orders)' },
           },
         },
         response: {
@@ -66,13 +72,15 @@ export async function prepareTradeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (request): Promise<PrepareTradeResponse> => {
-      const { walletAddress, marketId, outcome, side, size } = request.body;
+      const { walletAddress, marketId, outcome, side, size, orderType, limitPrice } = request.body;
 
       const response = await tradeService.prepareTrade(walletAddress, {
         marketId,
         outcome,
         side,
         size,
+        orderType,
+        limitPrice,
       });
 
       // Convert bigint to string for JSON serialization

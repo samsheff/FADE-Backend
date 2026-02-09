@@ -8,6 +8,8 @@ import { PositionUpdateJob } from '../jobs/position-update.job.js';
 import { EdgarSyncJob } from '../jobs/edgar-sync.job.js';
 import { EdgarUniverseDiscoveryJob } from '../jobs/edgar-universe-discovery.job.js';
 import { SearchIndexerJob } from '../jobs/search-indexer.job.js';
+import { EntityEnrichmentJob } from '../jobs/entity-enrichment.job.js';
+import { SignalComputationJob } from '../jobs/signal-computation.job.js';
 import { MarketDataPubSub } from '../services/market-data/market-pubsub.service.js';
 import { MarketDataStreamService } from '../services/market-data/market-data-stream.service.js';
 import { MarketDataService } from '../services/market-data/market-data.service.js';
@@ -109,6 +111,34 @@ async function start(): Promise<void> {
       }
     }
 
+    // Start entity enrichment job if enabled
+    let entityEnrichmentJob: EntityEnrichmentJob | null = null;
+    if (env.ENTITY_ENRICHMENT_ENABLED) {
+      logger.info('🏷️ Starting entity enrichment job...');
+      entityEnrichmentJob = new EntityEnrichmentJob();
+
+      try {
+        await entityEnrichmentJob.start(); // Wait for backfill to complete
+        logger.info('✅ Entity enrichment job initialized and scheduled');
+      } catch (error) {
+        logger.error({ error }, 'Failed to start entity enrichment job');
+      }
+    }
+
+    // Start signal computation job if enabled
+    let signalComputationJob: SignalComputationJob | null = null;
+    if (env.SIGNAL_COMPUTATION_ENABLED) {
+      logger.info('🔔 Starting signal computation job...');
+      signalComputationJob = new SignalComputationJob();
+
+      try {
+        await signalComputationJob.start();
+        logger.info('✅ Signal computation job initialized and scheduled');
+      } catch (error) {
+        logger.error({ error }, 'Failed to start signal computation job');
+      }
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`${signal} received, shutting down gracefully...`);
@@ -132,6 +162,16 @@ async function start(): Promise<void> {
       if (searchIndexerJob) {
         logger.info('Stopping search indexer job...');
         searchIndexerJob.stop();
+      }
+
+      if (entityEnrichmentJob) {
+        logger.info('Stopping entity enrichment job...');
+        entityEnrichmentJob.stop();
+      }
+
+      if (signalComputationJob) {
+        logger.info('Stopping signal computation job...');
+        signalComputationJob.stop();
       }
 
       await app.close();

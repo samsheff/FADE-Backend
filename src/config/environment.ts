@@ -221,6 +221,56 @@ const envSchema = z.object({
     .default('12'),
 
   // ============================================================================
+  // Entity Enrichment Configuration
+  // ============================================================================
+
+  ENTITY_ENRICHMENT_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
+
+  ENTITY_ENRICHMENT_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('604800000'), // 7 days (weekly)
+
+  ENTITY_ENRICHMENT_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('100'),
+
+  // ============================================================================
+  // Signal Computation Configuration
+  // ============================================================================
+
+  SIGNAL_COMPUTATION_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default('true'),
+
+  SIGNAL_COMPUTATION_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('900000'), // 15 minutes
+
+  SIGNAL_MIN_CONFIDENCE_THRESHOLD: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default('0.6'),
+
+  SIGNAL_EXPIRATION_DAYS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default('7'),
+
+  // ============================================================================
   // Elasticsearch Configuration
   // ============================================================================
 
@@ -268,3 +318,13 @@ export function getEnvironment(): Environment {
   }
   return _env;
 }
+
+/**
+ * Convenient proxy to get environment variables
+ * Throws if environment not loaded
+ */
+export const env = new Proxy({} as Environment, {
+  get(_target, prop: string) {
+    return getEnvironment()[prop as keyof Environment];
+  },
+});

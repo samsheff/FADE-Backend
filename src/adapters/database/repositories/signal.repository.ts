@@ -105,6 +105,33 @@ export class SignalRepository {
     return signals.map((s) => this.toModel(s));
   }
 
+  /**
+   * Find recent signals of a specific type computed after a given date
+   * Used for signal propagation
+   */
+  async findRecentSignals(
+    signalType: SignalType,
+    since: Date,
+  ): Promise<SignalRecord[]> {
+    const signals = await this.prisma.instrumentSignal.findMany({
+      where: {
+        signalType,
+        computedAt: {
+          gte: since,
+        },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
+      orderBy: {
+        computedAt: 'desc',
+      },
+    });
+
+    return signals.map((s) => this.toModel(s));
+  }
+
   async upsertSignal(input: CreateSignalInput): Promise<SignalRecord> {
     // Find existing signal of same type for this instrument
     const existing = await this.prisma.instrumentSignal.findFirst({
@@ -125,11 +152,12 @@ export class SignalRepository {
         data: {
           severity: input.severity,
           score: input.score,
+          confidence: input.confidence,
           reason: input.reason,
           evidenceFacts: input.evidenceFacts,
           sourceFiling: input.sourceFiling,
           expiresAt: input.expiresAt,
-          computedAt: new Date(),
+          computedAt: input.computedAt ?? new Date(),
         },
       });
 
@@ -142,9 +170,11 @@ export class SignalRepository {
           signalType: input.signalType,
           severity: input.severity,
           score: input.score,
+          confidence: input.confidence,
           reason: input.reason,
           evidenceFacts: input.evidenceFacts,
           sourceFiling: input.sourceFiling,
+          computedAt: input.computedAt ?? new Date(),
           expiresAt: input.expiresAt,
         },
       });
@@ -207,6 +237,7 @@ export class SignalRepository {
       signalType: prismaSignal.signalType,
       severity: prismaSignal.severity,
       score: prismaSignal.score.toString(),
+      confidence: parseFloat(prismaSignal.confidence?.toString() ?? '0'),
       reason: prismaSignal.reason,
       evidenceFacts: prismaSignal.evidenceFacts as string[],
       sourceFiling: prismaSignal.sourceFiling,

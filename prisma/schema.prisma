@@ -213,6 +213,11 @@ model Instrument {
   // Relations
   identifiers      InstrumentIdentifier[]
   signals          InstrumentSignal[]
+  classification   InstrumentClassification?
+  competitors      CompetitorRelationship[] @relation("Instrument")
+  competitorOf     CompetitorRelationship[] @relation("Competitor")
+  factorExposures  FactorExposure[]
+  documents        DocumentInstrument[]
 
   @@unique([type, symbol, exchange])
   @@index([status])
@@ -327,6 +332,7 @@ model FilingContent {
 // ============================================================================
 
 enum FactType {
+  // EDGAR facts (existing)
   ATM_PROGRAM
   SHELF_REGISTRATION
   CONVERTIBLE_DEBT
@@ -337,6 +343,40 @@ enum FactType {
   DIRECTOR_RESIGNATION
   COVENANT_BREACH
   RESTATEMENT
+
+  // Earnings transcript facts
+  LIQUIDITY_LANGUAGE
+  CAPITAL_RAISE_LANGUAGE
+  GUIDANCE_CUT
+  UNCERTAINTY_DISCLOSURE
+  FDA_CATALYST_MENTION
+  TRIAL_CATALYST_MENTION
+  PRODUCT_LAUNCH_MENTION
+  LAYOFF_ANNOUNCEMENT
+
+  // News facts
+  BANKRUPTCY_RISK_INDICATOR
+  FINANCING_ANNOUNCEMENT
+  LITIGATION_ACTION
+  REGULATORY_ACTION
+  MA_ANNOUNCEMENT
+  STRATEGIC_ALTERNATIVES
+  MANAGEMENT_TURNOVER
+
+  // Macro/Government facts
+  INTEREST_RATE_DECISION
+  CPI_RELEASE
+  UNEMPLOYMENT_DATA
+  INDUSTRIAL_PRODUCTION
+  CENTRAL_BANK_ANNOUNCEMENT
+
+  // FDA/Clinical facts
+  PDUFA_DATE
+  TRIAL_RESULT
+  FDA_HOLD
+  FDA_REJECTION
+  FDA_APPROVAL
+  SAFETY_NOTICE
 }
 
 model FilingFact {
@@ -362,10 +402,39 @@ model FilingFact {
 // ============================================================================
 
 enum SignalType {
+  // EDGAR signals (existing)
   DILUTION_RISK
   TOXIC_FINANCING_RISK
   DISTRESS_RISK
   VOLATILITY_SPIKE
+
+  // Earnings signals
+  LIQUIDITY_STRESS_CALL
+  CAPITAL_RAISE_IMMINENT
+  GUIDANCE_DETERIORATION
+  MANAGEMENT_UNCERTAINTY
+
+  // News signals
+  BANKRUPTCY_INDICATOR
+  FINANCING_EVENT
+  LEGAL_REGULATORY_RISK
+  MA_SPECULATION
+  MANAGEMENT_INSTABILITY
+
+  // Catalyst signals
+  FDA_CATALYST_UPCOMING
+  TRIAL_CATALYST_UPCOMING
+  PRODUCT_LAUNCH_UPCOMING
+  MACRO_EVENT_UPCOMING
+
+  // Event outcome signals
+  FDA_DECISION_SURPRISE
+  TRIAL_RESULT_SURPRISE
+  MACRO_SURPRISE
+
+  // Peer/Factor signals
+  PEER_IMPACT
+  FACTOR_EXPOSURE_ALERT
 }
 
 enum SignalSeverity {
@@ -477,4 +546,220 @@ model Candle {
   @@index([marketId, interval, timestamp])
   @@index([instrumentId, interval, timestamp])
   @@map("candles")
+}
+
+// ============================================================================
+// MULTI-SOURCE DOCUMENT STORAGE
+// ============================================================================
+
+enum DocumentType {
+  SEC_FILING
+  EARNINGS_TRANSCRIPT
+  NEWS_ARTICLE
+  FDA_ANNOUNCEMENT
+  CLINICAL_TRIAL
+  MACRO_EVENT
+}
+
+model Document {
+  id              String         @id @default(uuid())
+  documentType    DocumentType   @map("document_type")
+
+  // Source identity
+  sourceId        String         @unique @map("source_id")
+  sourceUrl       String?        @map("source_url")
+
+  // Classification
+  title           String
+  publishedAt     DateTime       @map("published_at")
+
+  // Status pipeline (same as Filing)
+  status          FilingStatus   @default(PENDING)
+  storagePath     String?        @map("storage_path")
+  contentHash     String?        @map("content_hash")
+
+  // Metadata
+  metadata        Json?
+
+  // Processing
+  errorMessage    String?        @map("error_message")
+  downloadedAt    DateTime?      @map("downloaded_at")
+  parsedAt        DateTime?      @map("parsed_at")
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  content         DocumentContent?
+  facts           DocumentFact[]
+  instruments     DocumentInstrument[]
+
+  @@index([documentType, status])
+  @@index([publishedAt])
+  @@map("documents")
+}
+
+model DocumentContent {
+  id           String   @id @default(uuid())
+  documentId   String   @unique @map("document_id")
+  fullText     String   @db.Text
+  structured   Json?
+  wordCount    Int      @default(0) @map("word_count")
+  parsedAt     DateTime @default(now()) @map("parsed_at")
+
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_contents")
+}
+
+model DocumentInstrument {
+  id           String     @id @default(uuid())
+  documentId   String     @map("document_id")
+  instrumentId String     @map("instrument_id")
+  relevance    Decimal    @default(1.0)
+  matchMethod  String     @map("match_method")
+
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, instrumentId])
+  @@index([instrumentId])
+  @@map("document_instruments")
+}
+
+model DocumentFact {
+  id           String       @id @default(uuid())
+  documentId   String       @map("document_id")
+  factType     FactType     @map("fact_type")
+  data         Json
+  evidence     String?      @db.Text
+  confidence   Decimal?     @default(1.0)
+  extractedAt  DateTime     @default(now()) @map("extracted_at")
+
+  document     Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([factType])
+  @@map("document_facts")
+}
+
+// ============================================================================
+// ENTITY ENRICHMENT
+// ============================================================================
+
+enum IndustryType {
+  PHARMACEUTICAL
+  BIOTECHNOLOGY
+  MINING
+  ENERGY
+  TECHNOLOGY
+  FINANCE
+  HEALTHCARE
+  CONSUMER
+  INDUSTRIAL
+  MATERIALS
+  UTILITIES
+  REAL_ESTATE
+  OTHER
+}
+
+enum SectorType {
+  HEALTHCARE
+  MATERIALS
+  ENERGY
+  FINANCIALS
+  CONSUMER_DISCRETIONARY
+  CONSUMER_STAPLES
+  INDUSTRIALS
+  TECHNOLOGY
+  COMMUNICATION_SERVICES
+  UTILITIES
+  REAL_ESTATE
+}
+
+model InstrumentClassification {
+  id           String       @id @default(uuid())
+  instrumentId String       @unique @map("instrument_id")
+  industry     IndustryType
+  sector       SectorType
+  confidence   Decimal      @default(1.0)
+  rationale    String?      @db.Text
+  classifiedAt DateTime     @default(now()) @map("classified_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  instrument   Instrument   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([industry])
+  @@index([sector])
+  @@map("instrument_classifications")
+}
+
+model CompetitorRelationship {
+  id               String     @id @default(uuid())
+  instrumentId     String     @map("instrument_id")
+  competitorId     String     @map("competitor_id")
+  relationshipType String     @map("relationship_type")
+  confidence       Decimal    @default(0.7)
+  rationale        String?    @db.Text
+  discoveredAt     DateTime   @default(now()) @map("discovered_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  instrument       Instrument @relation("Instrument", fields: [instrumentId], references: [id], onDelete: Cascade)
+  competitor       Instrument @relation("Competitor", fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, competitorId])
+  @@index([instrumentId])
+  @@index([competitorId])
+  @@map("competitor_relationships")
+}
+
+enum FactorType {
+  COMMODITY_GOLD
+  COMMODITY_SILVER
+  COMMODITY_OIL
+  COMMODITY_NATURAL_GAS
+  COMMODITY_COPPER
+  INTEREST_RATE_10Y
+  INTEREST_RATE_FED_FUNDS
+  INDEX_SPX
+  INDEX_NASDAQ
+  CURRENCY_USD
+  VOLATILITY_VIX
+}
+
+model FactorExposure {
+  id           String      @id @default(uuid())
+  instrumentId String      @map("instrument_id")
+  factorType   FactorType  @map("factor_type")
+  direction    String
+  magnitude    Decimal
+  confidence   Decimal     @default(0.7)
+  rationale    String?     @db.Text
+  discoveredAt DateTime    @default(now()) @map("discovered_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  instrument   Instrument  @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, factorType])
+  @@index([factorType])
+  @@map("factor_exposures")
+}
+
+// ============================================================================
+// UNIFIED SYNC TRACKING
+// ============================================================================
+
+model SyncWatermark {
+  id             String       @id @default(uuid())
+  sourceType     String       @map("source_type")
+  sourceKey      String       @map("source_key")
+  lastSyncedAt   DateTime     @map("last_synced_at")
+  lastItemDate   DateTime     @map("last_item_date")
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([sourceType, sourceKey])
+  @@index([lastItemDate])
+  @@map("sync_watermarks")
 }

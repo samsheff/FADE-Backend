@@ -125,6 +125,18 @@ export class IndexManagerService {
                 type: 'object',
                 enabled: false,
               },
+              signal_type: {
+                type: 'keyword',
+              },
+              signal_severity: {
+                type: 'keyword',
+              },
+              signal_score: {
+                type: 'float',
+              },
+              instrument_id: {
+                type: 'keyword',
+              },
             },
           },
         },

@@ -49,6 +49,7 @@ export class SearchIndexerJob {
       logger.info('Starting initial full indexing...');
       await this.indexer.indexAllMarkets();
       await this.indexer.indexAllInstruments();
+      await this.indexer.indexAllSignals();
 
       // Refresh index to make all documents searchable
       await this.indexManager.refreshIndex();
@@ -82,6 +83,18 @@ export class SearchIndexerJob {
     } catch (error) {
       const logger = getLogger();
       logger.error(`Failed to incrementally index instrument ${instrumentId}:`, error);
+    }
+  }
+
+  /**
+   * Index a single signal (for incremental updates).
+   */
+  async indexSignal(signalId: string): Promise<void> {
+    try {
+      await this.indexer.indexSignal(signalId);
+    } catch (error) {
+      const logger = getLogger();
+      logger.error(`Failed to incrementally index signal ${signalId}:`, error);
     }
   }
 

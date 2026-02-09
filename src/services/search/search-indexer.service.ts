@@ -8,7 +8,7 @@ import { getEnvironment } from '../../config/environment.js';
  * Document types for the unified search index
  */
 export interface SearchDocument {
-  entity_type: 'polymarket' | 'equity' | 'issuer' | 'tradingview_symbol';
+  entity_type: 'polymarket' | 'equity' | 'issuer' | 'tradingview_symbol' | 'signal';
   entity_id: string;
   primary_text: string;
   secondary_text?: string;
@@ -22,6 +22,12 @@ export interface SearchDocument {
   volume?: number;
   last_updated: Date;
   metadata?: Record<string, any>;
+
+  // Signal-specific fields
+  signal_type?: string;
+  signal_severity?: string;
+  signal_score?: number;
+  instrument_id?: string;
 }
 
 /**
@@ -279,6 +285,124 @@ export class SearchIndexerService {
     }
 
     logger.info(`Completed instrument indexing: ${indexed} total instruments`);
+  }
+
+  /**
+   * Index a single signal by ID.
+   */
+  async indexSignal(signalId: string): Promise<void> {
+    try {
+      const db = getPrismaClient();
+      const signal = await db.instrumentSignal.findUnique({
+        where: { id: signalId },
+        include: {
+          instrument: {
+            include: { identifiers: true },
+          },
+        },
+      });
+
+      if (!signal) {
+        const logger = getLogger();
+        logger.warn(`Signal ${signalId} not found for indexing`);
+        return;
+      }
+
+      const document: SearchDocument = {
+        entity_type: 'signal',
+        entity_id: signal.id,
+        primary_text: signal.reason, // Searchable reason text
+        secondary_text: `${signal.instrument.name} (${signal.instrument.symbol})`,
+        symbol: signal.instrument.symbol,
+        category: signal.signalType,
+        tags: [signal.signalType, signal.severity, signal.instrument.type],
+        has_signals: true,
+        signal_count: 1,
+        is_active: signal.expiresAt ? new Date() < signal.expiresAt : true,
+        last_updated: signal.computedAt,
+        metadata: {
+          instrumentId: signal.instrumentId,
+          instrumentName: signal.instrument.name,
+          severity: signal.severity,
+          score: signal.score.toString(),
+        },
+        signal_type: signal.signalType,
+        signal_severity: signal.severity,
+        signal_score: signal.score.toNumber(),
+        instrument_id: signal.instrumentId,
+      };
+
+      await this.indexDocument(document);
+    } catch (error) {
+      const logger = getLogger();
+      logger.error(`Failed to index signal ${signalId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Index all active signals in batches.
+   */
+  async indexAllSignals(): Promise<void> {
+    const logger = getLogger();
+    logger.info('Starting signal indexing...');
+
+    const db = getPrismaClient();
+    let offset = 0;
+    let indexed = 0;
+
+    while (true) {
+      const signals = await db.instrumentSignal.findMany({
+        take: this.batchSize,
+        skip: offset,
+        orderBy: { computedAt: 'desc' },
+        include: {
+          instrument: {
+            include: { identifiers: true },
+          },
+        },
+        where: {
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
+
+      if (signals.length === 0) break;
+
+      const documents: SearchDocument[] = signals.map(signal => ({
+        entity_type: 'signal',
+        entity_id: signal.id,
+        primary_text: signal.reason,
+        secondary_text: `${signal.instrument.name} (${signal.instrument.symbol})`,
+        symbol: signal.instrument.symbol,
+        category: signal.signalType,
+        tags: [signal.signalType, signal.severity, signal.instrument.type],
+        has_signals: true,
+        signal_count: 1,
+        is_active: signal.expiresAt ? new Date() < signal.expiresAt : true,
+        last_updated: signal.computedAt,
+        metadata: {
+          instrumentId: signal.instrumentId,
+          instrumentName: signal.instrument.name,
+          severity: signal.severity,
+          score: signal.score.toString(),
+        },
+        signal_type: signal.signalType,
+        signal_severity: signal.severity,
+        signal_score: signal.score.toNumber(),
+        instrument_id: signal.instrumentId,
+      }));
+
+      await this.bulkIndexDocuments(documents);
+      indexed += documents.length;
+      offset += this.batchSize;
+
+      logger.info(`Indexed ${indexed} signals...`);
+    }
+
+    logger.info(`Completed signal indexing: ${indexed} total`);
   }
 
   /**

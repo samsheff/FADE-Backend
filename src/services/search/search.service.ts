@@ -4,7 +4,7 @@ import { getLogger } from '../../utils/logger.js';
 import type { SearchDocument } from './search-indexer.service.js';
 
 export interface SearchResult {
-  entity_type: 'polymarket' | 'equity' | 'issuer' | 'tradingview_symbol';
+  entity_type: 'polymarket' | 'equity' | 'issuer' | 'tradingview_symbol' | 'signal';
   entity_id: string;
   primary_text: string;
   secondary_text?: string;
@@ -13,6 +13,10 @@ export interface SearchResult {
   has_signals: boolean;
   signal_count: number;
   metadata?: Record<string, any>;
+  signal_type?: string;
+  signal_severity?: string;
+  signal_score?: number;
+  instrument_id?: string;
 }
 
 export interface SearchOptions {
@@ -213,6 +217,10 @@ export class SearchService {
           has_signals: source.has_signals,
           signal_count: source.signal_count,
           metadata: source.metadata,
+          signal_type: source.signal_type,
+          signal_severity: source.signal_severity,
+          signal_score: source.signal_score,
+          instrument_id: source.instrument_id,
         };
       });
 

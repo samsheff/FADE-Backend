@@ -48,10 +48,7 @@ export class FinnhubApiAdapter {
     });
 
     // Rate limiter: 1 request per second (60 per minute free tier)
-    this.rateLimiter = new RateLimiter(
-      1, // 1 request
-      env.FINNHUB_API_RATE_LIMIT_MS, // per 1000ms
-    );
+    this.rateLimiter = new RateLimiter(env.FINNHUB_API_RATE_LIMIT_MS);
   }
 
   /**
@@ -78,7 +75,7 @@ export class FinnhubApiAdapter {
     to: Date,
   ): Promise<FinnhubArticle[]> {
     this.checkApiKey();
-    await this.rateLimiter.acquireToken();
+    await this.rateLimiter.wait();
 
     try {
       const fromStr = this.formatDate(from);
@@ -129,7 +126,7 @@ export class FinnhubApiAdapter {
    */
   async getMarketNews(category = 'general'): Promise<FinnhubArticle[]> {
     this.checkApiKey();
-    await this.rateLimiter.acquireToken();
+    await this.rateLimiter.wait();
 
     try {
       this.logger.debug({ category }, 'Fetching market news from Finnhub');

@@ -54,7 +54,7 @@ export class NewsIndexerService {
       this.logger.info({ count }, 'Incremental news discovery complete');
       return count;
     } catch (error) {
-      this.logger.error({ error }, 'Failed to discover recent news');
+      this.logger.error({ err: error, phase: 'DISCOVERY' }, 'Failed to discover recent news');
       throw error;
     }
   }
@@ -94,7 +94,7 @@ export class NewsIndexerService {
       this.logger.info({ totalCount }, 'Historical news backfill complete');
       return totalCount;
     } catch (error) {
-      this.logger.error({ error }, 'Failed to backfill historical news');
+      this.logger.error({ err: error, phase: 'BACKFILL' }, 'Failed to backfill historical news');
       throw error;
     }
   }
@@ -208,7 +208,7 @@ export class NewsIndexerService {
         );
       } catch (error) {
         this.logger.error(
-          { error, articleId: article.id },
+          { err: error, articleId: article.id, phase: 'LINK_INSTRUMENTS' },
           'Failed to link article to instruments',
         );
         // Continue with next article

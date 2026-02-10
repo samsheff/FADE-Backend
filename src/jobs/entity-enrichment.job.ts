@@ -64,7 +64,7 @@ export class EntityEnrichmentJob {
     // Schedule weekly runs
     this.intervalId = setInterval(() => {
       this.run().catch((error) => {
-        this.logger.error({ error }, 'Scheduled entity enrichment run failed');
+        this.logger.error({ err: error }, 'Scheduled entity enrichment run failed');
       });
     }, env.ENTITY_ENRICHMENT_INTERVAL_MS);
 
@@ -152,7 +152,7 @@ export class EntityEnrichmentJob {
 
       return stats;
     } catch (error) {
-      this.logger.error({ error }, 'Backfill failed');
+      this.logger.error({ err: error }, 'Backfill failed');
       throw error;
     }
   }
@@ -228,7 +228,7 @@ export class EntityEnrichmentJob {
 
       return stats;
     } catch (error) {
-      this.logger.error({ error }, 'Entity enrichment run failed');
+      this.logger.error({ err: error }, 'Entity enrichment run failed');
       throw error;
     } finally {
       this.isRunning = false;
@@ -255,8 +255,19 @@ export class EntityEnrichmentJob {
           await this.classificationService.classifyInstrument(instrumentId);
 
         if (classification) {
-          await this.instrumentRepo.upsertClassification(classification);
-          stats.classified++;
+          // Individual upsert failures should not crash entire batch
+          try {
+            await this.instrumentRepo.upsertClassification(classification);
+            stats.classified++;
+          } catch (upsertError) {
+            this.logger.error(
+              { err: upsertError, instrumentId, classification },
+              'Failed to upsert classification'
+            );
+            stats.errors++;
+            // Continue to next instrument
+            continue;
+          }
 
           // Stage 2: Discover competitors
           try {
@@ -277,7 +288,7 @@ export class EntityEnrichmentJob {
             }
           } catch (error) {
             this.logger.error(
-              { error, instrumentId },
+              { err: error, instrumentId },
               'Failed to discover competitors'
             );
             stats.errors++;
@@ -295,7 +306,7 @@ export class EntityEnrichmentJob {
             }
           } catch (error) {
             this.logger.error(
-              { error, instrumentId },
+              { err: error, instrumentId },
               'Failed to map factor exposures'
             );
             stats.errors++;
@@ -305,7 +316,7 @@ export class EntityEnrichmentJob {
           stats.errors++;
         }
       } catch (error) {
-        this.logger.error({ error, instrumentId }, 'Failed to enrich instrument');
+        this.logger.error({ err: error, instrumentId }, 'Failed to enrich instrument');
         stats.errors++;
         // Continue to next instrument
       }

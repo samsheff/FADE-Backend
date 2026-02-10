@@ -69,7 +69,7 @@ export class NewsDownloaderService {
         successCount++;
       } catch (error) {
         this.logger.error(
-          { error, documentId: document.id },
+          { err: error, documentId: document.id, phase: 'DOWNLOAD' },
           'Failed to download article',
         );
         // Error handling is done inside downloadArticle
@@ -171,7 +171,7 @@ export class NewsDownloaderService {
         error instanceof Error ? error.message : 'Unknown error';
 
       this.logger.error(
-        { error, documentId: document.id },
+        { err: error, documentId: document.id, sourceUrl: document.sourceUrl },
         'Article download failed',
       );
 

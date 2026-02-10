@@ -77,7 +77,7 @@ export class NewsSignalExtractorService {
         successCount++;
       } catch (error) {
         this.logger.error(
-          { error, documentId: document.id },
+          { err: error, documentId: document.id, phase: 'SIGNAL_EXTRACTION' },
           'Failed to extract signals from article',
         );
         // Error handling is done inside extractSignalsFromDocument
@@ -148,7 +148,6 @@ export class NewsSignalExtractorService {
                 signalType: signal.signalType,
                 severity: signal.severity,
                 score: signal.score,
-                confidence: 0.8, // News signals have medium-high confidence
                 reason: signal.reason,
                 evidenceFacts: [
                   {
@@ -175,7 +174,12 @@ export class NewsSignalExtractorService {
               );
             } catch (error) {
               this.logger.error(
-                { error, documentId: document.id, instrumentId: link.instrumentId },
+                {
+                  err: error,
+                  documentId: document.id,
+                  instrumentId: link.instrumentId,
+                  signalType: signal.signalType,
+                },
                 'Failed to create instrument signal',
               );
               // Continue with next signal
@@ -197,7 +201,7 @@ export class NewsSignalExtractorService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       this.logger.error(
-        { error, documentId: document.id },
+        { err: error, documentId: document.id, phase: 'EXTRACTION_COMPLETE' },
         'Article signal extraction failed',
       );
 

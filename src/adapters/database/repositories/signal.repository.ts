@@ -152,7 +152,6 @@ export class SignalRepository {
         data: {
           severity: input.severity,
           score: input.score,
-          confidence: input.confidence,
           reason: input.reason,
           evidenceFacts: input.evidenceFacts,
           sourceFiling: input.sourceFiling,
@@ -170,7 +169,6 @@ export class SignalRepository {
           signalType: input.signalType,
           severity: input.severity,
           score: input.score,
-          confidence: input.confidence,
           reason: input.reason,
           evidenceFacts: input.evidenceFacts,
           sourceFiling: input.sourceFiling,
@@ -237,7 +235,6 @@ export class SignalRepository {
       signalType: prismaSignal.signalType,
       severity: prismaSignal.severity,
       score: prismaSignal.score.toString(),
-      confidence: parseFloat(prismaSignal.confidence?.toString() ?? '0'),
       reason: prismaSignal.reason,
       evidenceFacts: prismaSignal.evidenceFacts as string[],
       sourceFiling: prismaSignal.sourceFiling,

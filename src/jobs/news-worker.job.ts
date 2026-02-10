@@ -62,11 +62,25 @@ export class NewsWorkerJob {
     await this.downloader.init();
 
     // Run backfill ONCE on first startup
+    // SAFETY: Backfill failure should not prevent worker from starting
     if (env.NEWS_BACKFILL_ENABLED && !this.hasRunBackfill) {
       this.logger.info('Starting News historical backfill...');
-      await this.runBackfill();
-      this.hasRunBackfill = true;
-      this.logger.info('News historical backfill complete');
+      try {
+        await this.runBackfill();
+        this.logger.info('News historical backfill complete');
+      } catch (error) {
+        this.logger.error(
+          {
+            err: error,
+            phase: 'BACKFILL',
+            lookbackDays: env.NEWS_BACKFILL_LOOKBACK_DAYS,
+          },
+          'News backfill failed - continuing with real-time sync',
+        );
+      } finally {
+        // Mark as run even on failure to prevent retry loop
+        this.hasRunBackfill = true;
+      }
     }
 
     // Initial real-time run
@@ -75,7 +89,7 @@ export class NewsWorkerJob {
     // Schedule periodic real-time runs
     this.intervalId = setInterval(() => {
       this.run().catch((error) => {
-        this.logger.error({ error }, 'News worker job error');
+        this.logger.error({ err: error, phase: 'REALTIME_SCHEDULED' }, 'News worker job error');
       });
     }, env.NEWS_SYNC_INTERVAL_MS);
 
@@ -155,7 +169,10 @@ export class NewsWorkerJob {
         'Historical backfill iteration complete',
       );
     } catch (error) {
-      this.logger.error({ error, mode: 'BACKFILL' }, 'Historical backfill iteration failed');
+      this.logger.error(
+        { err: error, mode: 'BACKFILL', lookbackDays: env.NEWS_BACKFILL_LOOKBACK_DAYS },
+        'Historical backfill iteration failed',
+      );
       throw error;
     }
   }
@@ -228,7 +245,7 @@ export class NewsWorkerJob {
         'Real-time sync iteration complete',
       );
     } catch (error) {
-      this.logger.error({ error, mode: 'REALTIME' }, 'Real-time sync iteration failed');
+      this.logger.error({ err: error, mode: 'REALTIME' }, 'Real-time sync iteration failed');
     } finally {
       this.isRunning = false;
     }

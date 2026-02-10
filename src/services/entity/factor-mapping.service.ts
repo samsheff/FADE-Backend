@@ -89,7 +89,6 @@ const INDUSTRY_FACTOR_MAPPINGS: Record<IndustryType, FactorConfig[]> = {
   HEALTHCARE: [],
   CONSUMER: [],
   INDUSTRIAL: [],
-  TELECOMMUNICATIONS: [],
   OTHER: [],
 };
 

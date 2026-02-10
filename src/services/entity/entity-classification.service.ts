@@ -84,6 +84,16 @@ const INDUSTRY_KEYWORDS: Record<IndustryType, string[]> = {
     'chip',
     'computing',
     'data center',
+    // Telecommunications/networking infrastructure (maps to COMMUNICATION_SERVICES sector)
+    'telecom',
+    'wireless',
+    'broadband',
+    'network',
+    'carrier',
+    '5g',
+    'spectrum',
+    'fiber',
+    'cable',
   ],
   HEALTHCARE: [
     'hospital',
@@ -130,17 +140,6 @@ const INDUSTRY_KEYWORDS: Record<IndustryType, string[]> = {
     'transportation',
     'logistics',
   ],
-  TELECOMMUNICATIONS: [
-    'telecom',
-    'wireless',
-    'broadband',
-    'network',
-    'carrier',
-    '5g',
-    'spectrum',
-    'fiber',
-    'cable',
-  ],
   UTILITIES: [
     'utility',
     'electric',
@@ -158,19 +157,19 @@ const INDUSTRY_KEYWORDS: Record<IndustryType, string[]> = {
 
 /**
  * Industry to GICS sector mapping
+ * Maps to Prisma SectorType enum - must match schema exactly
  */
 const INDUSTRY_TO_SECTOR: Record<IndustryType, SectorType> = {
-  PHARMACEUTICAL: 'HEALTH_CARE',
-  BIOTECHNOLOGY: 'HEALTH_CARE',
-  HEALTHCARE: 'HEALTH_CARE',
+  PHARMACEUTICAL: 'HEALTHCARE',
+  BIOTECHNOLOGY: 'HEALTHCARE',
+  HEALTHCARE: 'HEALTHCARE',
   MINING: 'MATERIALS',
   ENERGY: 'ENERGY',
   FINANCE: 'FINANCIALS',
-  TECHNOLOGY: 'INFORMATION_TECHNOLOGY',
+  TECHNOLOGY: 'TECHNOLOGY',
   REAL_ESTATE: 'REAL_ESTATE',
   CONSUMER: 'CONSUMER_DISCRETIONARY',
   INDUSTRIAL: 'INDUSTRIALS',
-  TELECOMMUNICATIONS: 'COMMUNICATION_SERVICES',
   UTILITIES: 'UTILITIES',
   OTHER: 'COMMUNICATION_SERVICES',
 };

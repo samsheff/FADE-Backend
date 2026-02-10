@@ -154,7 +154,6 @@ export interface SignalRecord {
   signalType: SignalType;
   severity: SignalSeverity;
   score: string;
-  confidence: number;
   reason: string;
   evidenceFacts: string[];
   sourceFiling: string | null;
@@ -205,7 +204,6 @@ export interface CreateSignalInput {
   signalType: SignalType;
   severity: SignalSeverity;
   score: number;
-  confidence: number;
   reason: string;
   evidenceFacts: string[];
   sourceFiling?: string;

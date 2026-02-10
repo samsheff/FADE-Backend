@@ -93,7 +93,7 @@ async function start(): Promise<void> {
       logger.info('🔍 Starting EDGAR filing sync job...');
       edgarSyncJob = new EdgarSyncJob();
       edgarSyncJob.start().catch((error) => {
-        logger.error({ error }, 'Failed to start EDGAR filing sync job');
+        logger.error({ err: error }, 'Failed to start EDGAR filing sync job');
       });
       logger.info('✅ EDGAR filing sync job started and scheduled');
     }
@@ -104,7 +104,7 @@ async function start(): Promise<void> {
       logger.info('📰 Starting News worker...');
       newsWorkerJob = new NewsWorkerJob();
       newsWorkerJob.start().catch((error) => {
-        logger.error({ error }, 'Failed to start News worker');
+        logger.error({ err: error }, 'Failed to start News worker');
       });
       logger.info('✅ News worker started');
     }

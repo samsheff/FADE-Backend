@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import type { Logger } from 'pino';
 import {
   InstrumentRecord,
   CreateInstrumentInput,
@@ -17,12 +18,20 @@ import {
   SectorType,
 } from '../../../types/document.types.js';
 import { getPrismaClient } from '../client.js';
+import { getLogger } from '../../../utils/logger.js';
 
 export class InstrumentRepository {
   private prisma: PrismaClient;
+  private logger?: Logger;
 
   constructor() {
     this.prisma = getPrismaClient();
+    try {
+      this.logger = getLogger().child({ component: 'InstrumentRepository' });
+    } catch {
+      // Logger may not be ready during initialization
+      this.logger = undefined;
+    }
   }
 
   async findById(id: string): Promise<InstrumentRecord | null> {
@@ -260,20 +269,79 @@ export class InstrumentRepository {
   async upsertClassification(
     input: CreateInstrumentClassificationInput,
   ): Promise<InstrumentClassificationRecord> {
+    // SAFETY: Validate enum values to prevent Prisma validation crashes
+    const validIndustries = [
+      'PHARMACEUTICAL',
+      'BIOTECHNOLOGY',
+      'MINING',
+      'ENERGY',
+      'TECHNOLOGY',
+      'FINANCE',
+      'HEALTHCARE',
+      'CONSUMER',
+      'INDUSTRIAL',
+      'MATERIALS',
+      'UTILITIES',
+      'REAL_ESTATE',
+      'OTHER',
+    ] as const;
+
+    const validSectors = [
+      'HEALTHCARE',
+      'MATERIALS',
+      'ENERGY',
+      'FINANCIALS',
+      'CONSUMER_DISCRETIONARY',
+      'CONSUMER_STAPLES',
+      'INDUSTRIALS',
+      'TECHNOLOGY',
+      'COMMUNICATION_SERVICES',
+      'UTILITIES',
+      'REAL_ESTATE',
+    ] as const;
+
+    let industry = input.industry;
+    let sector = input.sector;
+
+    // Validate industry
+    if (!validIndustries.includes(industry as any)) {
+      this.logger?.error({
+        instrumentId: input.instrumentId,
+        providedIndustry: input.industry,
+        validIndustries: Array.from(validIndustries),
+        message: 'Invalid industry value provided, using fallback',
+      });
+      // Fallback to prevent crash
+      industry = 'OTHER' as IndustryType;
+    }
+
+    // Validate sector
+    if (!validSectors.includes(sector as any)) {
+      this.logger?.error({
+        instrumentId: input.instrumentId,
+        providedSector: input.sector,
+        providedIndustry: input.industry,
+        validSectors: Array.from(validSectors),
+        message: 'Invalid sector value provided, using fallback',
+      });
+      // Fallback to prevent crash
+      sector = 'COMMUNICATION_SERVICES' as SectorType;
+    }
+
     const upserted = await this.prisma.instrumentClassification.upsert({
       where: {
         instrumentId: input.instrumentId,
       },
       create: {
         instrumentId: input.instrumentId,
-        industry: input.industry,
-        sector: input.sector,
+        industry: industry,
+        sector: sector,
         confidence: input.confidence || 1.0,
         rationale: input.rationale || null,
       },
       update: {
-        industry: input.industry,
-        sector: input.sector,
+        industry: industry,
+        sector: sector,
         confidence: input.confidence || 1.0,
         rationale: input.rationale || null,
         updatedAt: new Date(),

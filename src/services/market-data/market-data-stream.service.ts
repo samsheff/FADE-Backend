@@ -24,6 +24,7 @@ export class MarketDataStreamService {
   private logger = getLogger();
   private orderbookStates = new Map<OrderbookKey, OrderbookState>();
   private subscriptionKeys = new Set<OrderbookKey>();
+  private closedMarkets = new Set<string>();
   private refreshTimer: NodeJS.Timeout | null = null;
   private env = getEnvironment();
 
@@ -48,6 +49,12 @@ export class MarketDataStreamService {
       });
     });
     this.wsClient.connect();
+
+    // Pre-populate closed markets set from database
+    const allMarkets = await this.marketRepo.findAll();
+    allMarkets
+      .filter(m => !m.active)
+      .forEach(m => this.closedMarkets.add(m.id));
 
     // Subscribe to existing markets immediately
     await this.subscribeToActiveMarkets();
@@ -82,6 +89,11 @@ export class MarketDataStreamService {
     const marketsToDeactivate: string[] = [];
 
     for (const market of activeMarkets) {
+      // Skip markets already identified as closed
+      if (this.closedMarkets.has(market.id)) {
+        continue;
+      }
+
       let hasAnyToken = false;
       let hasAnyOrderbook = false;
       let missingOrderbookCount = 0;
@@ -226,10 +238,15 @@ export class MarketDataStreamService {
     } catch (error) {
       // Handle market not found (404) - expected for closed markets
       if (error instanceof MarketNotFoundError) {
-        this.logger.info(
-          { marketId: marketId.slice(0, 8), outcome, tokenId: tokenId.slice(0, 8) },
-          'Orderbook not found in CLOB API - market likely closed or removed',
-        );
+        // Mark market as closed (idempotent - only logs/updates once)
+        if (!this.closedMarkets.has(marketId)) {
+          this.closedMarkets.add(marketId);
+          await this.markMarketClosed(marketId);
+          this.logger.info(
+            { marketId: marketId.slice(0, 8), outcome, tokenId: tokenId.slice(0, 8) },
+            'Market closed - orderbook no longer available in CLOB API',
+          );
+        }
         return false;
       }
 
@@ -330,6 +347,14 @@ export class MarketDataStreamService {
         bestAsk: bestAsk || undefined,
         timestamp: message.timestamp,
       });
+    }
+  }
+
+  private async markMarketClosed(marketId: string): Promise<void> {
+    try {
+      await this.marketRepo.update(marketId, { active: false });
+    } catch (error) {
+      this.logger.warn({ error, marketId }, 'Failed to mark market as closed');
     }
   }
 

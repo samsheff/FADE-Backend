@@ -10,7 +10,7 @@ import {
   MarketSearchFilters,
   Orderbook,
 } from '../../types/market.types.js';
-import { NotFoundError, ValidationError } from '../../utils/errors.js';
+import { NotFoundError, ValidationError, MarketNotFoundError } from '../../utils/errors.js';
 import { getLogger } from '../../utils/logger.js';
 import { getEnvironment } from '../../config/environment.js';
 import { aggregateOrderbookDepth } from '../../utils/orderbook-aggregator.js';
@@ -158,6 +158,22 @@ export class MarketDataService {
       this.cache.setOrderbook(cacheKey, orderbook);
       return this.applyAggregation(orderbook, options);
     } catch (error) {
+      // Handle market closure (404 from CLOB API)
+      if (error instanceof MarketNotFoundError) {
+        await this.markMarketClosed(marketId);
+        this.logger.info({ marketId, outcome }, 'Market closed - orderbook no longer available in CLOB API');
+
+        // In dev mode, return synthetic orderbook for testing
+        if (this.env.NODE_ENV !== 'production') {
+          const orderbook = this.buildSyntheticOrderbook(record, outcome);
+          this.cache.setOrderbook(cacheKey, orderbook);
+          return this.applyAggregation(orderbook, options);
+        }
+
+        throw error; // Re-throw in production
+      }
+
+      // Other errors (network, rate limit, etc.)
       this.logger.error({ error, marketId, outcome }, 'Failed to fetch orderbook from CLOB');
 
       if (this.env.NODE_ENV !== 'production') {
@@ -201,6 +217,14 @@ export class MarketDataService {
       createdAt: record.createdAt,
       lastUpdated: record.lastUpdated,
     };
+  }
+
+  private async markMarketClosed(marketId: string): Promise<void> {
+    try {
+      await this.marketRepo.update(marketId, { active: false });
+    } catch (error) {
+      this.logger.warn({ error, marketId }, 'Failed to mark market as closed');
+    }
   }
 
   private buildSyntheticOrderbook(record: MarketRecord, outcome: string): Orderbook {

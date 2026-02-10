@@ -31,8 +31,9 @@ model Market {
   createdAt          DateTime @default(now())
   lastUpdated        DateTime @updatedAt @map("last_updated")
 
-  trades    Trade[]
-  positions Position[]
+  trades         Trade[]
+  positions      Position[]
+  watchlistItems WatchlistItem[]
 
   @@index([active])
   @@index([categoryTag])
@@ -762,4 +763,37 @@ model SyncWatermark {
   @@unique([sourceType, sourceKey])
   @@index([lastItemDate])
   @@map("sync_watermarks")
+}
+
+// ============================================================================
+// WATCHLIST FUNCTIONALITY
+// ============================================================================
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  name      String
+  sortOrder Int      @map("sort_order") // 1-9 for keyboard shortcuts
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items     WatchlistItem[]
+
+  @@unique([sortOrder])
+  @@index([sortOrder])
+  @@map("watchlists")
+}
+
+model WatchlistItem {
+  id          String   @id @default(uuid())
+  watchlistId String   @map("watchlist_id")
+  marketId    String   @map("market_id")
+  addedAt     DateTime @default(now()) @map("added_at")
+
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  market      Market    @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, marketId])
+  @@index([watchlistId])
+  @@index([marketId])
+  @@map("watchlist_items")
 }

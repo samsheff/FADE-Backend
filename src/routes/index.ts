@@ -10,6 +10,7 @@ import { signalsRoutes } from './signals/signals.routes.js';
 import { filingsRoutes } from './filings/filings.routes.js';
 import { universeRoutes } from './universe/universe.routes.js';
 import { searchRoutes } from './search/search.routes.js';
+import { watchlistRoutes } from './watchlist/watchlist.routes.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Auth routes
@@ -36,4 +37,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Search routes
   await app.register(searchRoutes, { prefix: '/api/v1/search' });
+
+  // Watchlist routes
+  await app.register(watchlistRoutes, { prefix: '/api/v1/watchlists' });
 }

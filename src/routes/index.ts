@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { healthRoute } from './health.route.js';
 import { nonceRoutes } from './auth/nonce.js';
 import { getMarketsRoutes } from './markets/get-markets.js';
 import { getCandlesRoutes } from './markets/get-candles.js';
@@ -13,6 +14,9 @@ import { searchRoutes } from './search/search.routes.js';
 import { watchlistRoutes } from './watchlist/watchlist.routes.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // Health check (no prefix)
+  await app.register(healthRoute);
+
   // Auth routes
   await app.register(nonceRoutes, { prefix: '/api/v1/auth' });
 

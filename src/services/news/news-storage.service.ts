@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { NewsStorage } from './storage.interface.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 
@@ -9,7 +10,7 @@ import { getLogger } from '../../utils/logger.js';
  * Path structure: {NEWS_STORAGE_PATH}/{publisher_slug}/{article_id}.txt
  * Example: ./storage/news/reuters/finnhub-12345.txt
  */
-export class NewsStorageService {
+export class NewsStorageService implements NewsStorage {
   private logger;
   private basePath: string;
 

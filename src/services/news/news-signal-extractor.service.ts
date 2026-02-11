@@ -1,6 +1,7 @@
 import { DocumentRepository } from '../../adapters/database/repositories/document.repository.js';
 import { SignalRepository } from '../../adapters/database/repositories/signal.repository.js';
-import { NewsStorageService } from './news-storage.service.js';
+import { NewsStorage } from './storage.interface.js';
+import { createNewsStorage } from './storage.factory.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import { DocumentRecord } from '../../types/document.types.js';
@@ -37,13 +38,13 @@ interface ExtractedSignal {
 export class NewsSignalExtractorService {
   private documentRepo: DocumentRepository;
   private signalRepo: SignalRepository;
-  private storage: NewsStorageService;
+  private storage: NewsStorage;
   private logger;
 
-  constructor() {
+  constructor(storage?: NewsStorage) {
     this.documentRepo = new DocumentRepository();
     this.signalRepo = new SignalRepository();
-    this.storage = new NewsStorageService();
+    this.storage = storage || createNewsStorage();
     this.logger = getLogger();
   }
 

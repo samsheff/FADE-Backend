@@ -159,6 +159,17 @@ const envSchema = z.object({
     .string()
     .default('./storage/edgar'),
 
+  // S3 Storage Configuration for EDGAR
+  EDGAR_STORAGE_TYPE: z
+    .enum(['local', 's3'])
+    .default('local'),
+
+  EDGAR_S3_BUCKET: optionalString,
+  EDGAR_S3_ENDPOINT: optionalUrl,
+  EDGAR_S3_REGION: optionalString,
+  EDGAR_S3_ACCESS_KEY: optionalString,
+  EDGAR_S3_SECRET_KEY: optionalString,
+
   EDGAR_API_USER_AGENT: z
     .string()
     .default('Trading Terminal Bot (contact@example.com)'),
@@ -239,6 +250,17 @@ const envSchema = z.object({
   NEWS_STORAGE_PATH: z
     .string()
     .default('./storage/news'),
+
+  // S3 Storage Configuration for News
+  NEWS_STORAGE_TYPE: z
+    .enum(['local', 's3'])
+    .default('local'),
+
+  NEWS_S3_BUCKET: optionalString,
+  NEWS_S3_ENDPOINT: optionalUrl,
+  NEWS_S3_REGION: optionalString,
+  NEWS_S3_ACCESS_KEY: optionalString,
+  NEWS_S3_SECRET_KEY: optionalString,
 
   NEWS_BATCH_SIZE: z
     .string()

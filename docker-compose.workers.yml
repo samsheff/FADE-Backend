@@ -1,0 +1,215 @@
+version: '3.8'
+
+# Production Worker Orchestration
+# Runs all background jobs in separate containers
+# Deploy on a single DigitalOcean Droplet or Kubernetes cluster
+
+services:
+  # Market Sync Worker - Syncs markets and orderbook data
+  market-sync:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-market-sync
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/market-sync-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
+      - POLYMARKET_CLOB_API_URL=${POLYMARKET_CLOB_API_URL}
+      - POLYMARKET_CLOB_WS_URL=${POLYMARKET_CLOB_WS_URL}
+      - POLYMARKET_GAMMA_API_URL=${POLYMARKET_GAMMA_API_URL}
+      - POLYMARKET_DATA_API_URL=${POLYMARKET_DATA_API_URL}
+      - MARKET_SYNC_INTERVAL_MS=${MARKET_SYNC_INTERVAL_MS:-60000}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Position Update Worker - Updates user positions
+  position-update:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-position-update
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/position-update-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
+      - POLYMARKET_CLOB_API_URL=${POLYMARKET_CLOB_API_URL}
+      - POSITION_UPDATE_INTERVAL_MS=${POSITION_UPDATE_INTERVAL_MS:-300000}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # EDGAR Universe Discovery Worker - Populates instrument universe
+  edgar-universe:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-edgar-universe
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/edgar-universe-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - EDGAR_WORKER_ENABLED=${EDGAR_WORKER_ENABLED:-true}
+      - EDGAR_UNIVERSE_SYNC_INTERVAL_MS=${EDGAR_UNIVERSE_SYNC_INTERVAL_MS:-86400000}
+      - EDGAR_API_USER_AGENT=${EDGAR_API_USER_AGENT}
+      - EDGAR_API_RATE_LIMIT_MS=${EDGAR_API_RATE_LIMIT_MS:-100}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # EDGAR Filing Sync Worker - Downloads and processes filings
+  edgar-sync:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-edgar-sync
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/edgar-sync-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - EDGAR_WORKER_ENABLED=${EDGAR_WORKER_ENABLED:-true}
+      - EDGAR_SYNC_INTERVAL_MS=${EDGAR_SYNC_INTERVAL_MS:-3600000}
+      - EDGAR_STORAGE_TYPE=${EDGAR_STORAGE_TYPE:-s3}
+      - EDGAR_S3_BUCKET=${EDGAR_S3_BUCKET}
+      - EDGAR_S3_ENDPOINT=${EDGAR_S3_ENDPOINT}
+      - EDGAR_S3_REGION=${EDGAR_S3_REGION:-us-east-1}
+      - EDGAR_S3_ACCESS_KEY=${EDGAR_S3_ACCESS_KEY}
+      - EDGAR_S3_SECRET_KEY=${EDGAR_S3_SECRET_KEY}
+      - EDGAR_API_USER_AGENT=${EDGAR_API_USER_AGENT}
+      - EDGAR_API_RATE_LIMIT_MS=${EDGAR_API_RATE_LIMIT_MS:-100}
+      - EDGAR_BATCH_SIZE=${EDGAR_BATCH_SIZE:-10}
+      - EDGAR_BACKFILL_ENABLED=${EDGAR_BACKFILL_ENABLED:-true}
+      - EDGAR_BACKFILL_LOOKBACK_DAYS=${EDGAR_BACKFILL_LOOKBACK_DAYS:-90}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # News Worker - Fetches and processes news articles
+  news-worker:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-news
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/news-worker-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - NEWS_WORKER_ENABLED=${NEWS_WORKER_ENABLED:-true}
+      - NEWS_SYNC_INTERVAL_MS=${NEWS_SYNC_INTERVAL_MS:-3600000}
+      - NEWS_STORAGE_TYPE=${NEWS_STORAGE_TYPE:-s3}
+      - NEWS_S3_BUCKET=${NEWS_S3_BUCKET}
+      - NEWS_S3_ENDPOINT=${NEWS_S3_ENDPOINT}
+      - NEWS_S3_REGION=${NEWS_S3_REGION:-us-east-1}
+      - NEWS_S3_ACCESS_KEY=${NEWS_S3_ACCESS_KEY}
+      - NEWS_S3_SECRET_KEY=${NEWS_S3_SECRET_KEY}
+      - NEWS_BATCH_SIZE=${NEWS_BATCH_SIZE:-20}
+      - NEWS_BACKFILL_ENABLED=${NEWS_BACKFILL_ENABLED:-true}
+      - NEWS_BACKFILL_LOOKBACK_DAYS=${NEWS_BACKFILL_LOOKBACK_DAYS:-7}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+      - FINNHUB_API_BASE_URL=${FINNHUB_API_BASE_URL}
+      - FINNHUB_API_RATE_LIMIT_MS=${FINNHUB_API_RATE_LIMIT_MS:-1000}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Entity Enrichment Worker - Enriches instrument metadata
+  entity-enrichment:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-entity-enrichment
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/entity-enrichment-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - ENTITY_ENRICHMENT_ENABLED=${ENTITY_ENRICHMENT_ENABLED:-true}
+      - ENTITY_ENRICHMENT_INTERVAL_MS=${ENTITY_ENRICHMENT_INTERVAL_MS:-604800000}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Signal Computation Worker - Computes derived signals
+  signal-computation:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-signal-computation
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/signal-computation-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - SIGNAL_COMPUTATION_ENABLED=${SIGNAL_COMPUTATION_ENABLED:-true}
+      - SIGNAL_DILUTION_SHELF_THRESHOLD_PCT=${SIGNAL_DILUTION_SHELF_THRESHOLD_PCT:-20}
+      - SIGNAL_TOXIC_PRICE_THRESHOLD=${SIGNAL_TOXIC_PRICE_THRESHOLD:-2}
+      - SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS=${SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS:-12}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Search Indexer Worker - Indexes content in OpenSearch
+  search-indexer:
+    image: ${DOCKER_REGISTRY:-registry.digitalocean.com/terminal}/terminal-worker:${VERSION:-latest}
+    container_name: worker-search-indexer
+    restart: unless-stopped
+    command: ["node", "dist/jobs/runners/search-indexer-runner.js"]
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+      - SEARCH_INDEXER_ENABLED=${SEARCH_INDEXER_ENABLED:-true}
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Watchtower - Auto-update containers when new images are pushed
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300  # Check every 5 minutes
+      - WATCHTOWER_CLEANUP=true       # Remove old images
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_LABEL_ENABLE=false
+    networks:
+      - terminal-workers
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  terminal-workers:
+    driver: bridge

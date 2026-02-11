@@ -1,7 +1,8 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import { DocumentRepository } from '../../adapters/database/repositories/document.repository.js';
-import { NewsStorageService } from './news-storage.service.js';
+import { NewsStorage } from './storage.interface.js';
+import { createNewsStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
 import { DocumentRecord } from '../../types/document.types.js';
 
@@ -18,17 +19,17 @@ import { DocumentRecord } from '../../types/document.types.js';
  * - Fetch article content via HTTP
  * - Extract clean text from HTML
  * - Compute SHA256 content hash
- * - Store in NewsStorageService
+ * - Store in NewsStorage
  * - Update Document status
  */
 export class NewsDownloaderService {
   private documentRepo: DocumentRepository;
-  private storage: NewsStorageService;
+  private storage: NewsStorage;
   private logger;
 
-  constructor() {
+  constructor(storage?: NewsStorage) {
     this.documentRepo = new DocumentRepository();
-    this.storage = new NewsStorageService();
+    this.storage = storage || createNewsStorage();
     this.logger = getLogger();
   }
 

@@ -1,6 +1,6 @@
 import { FilingRepository } from '../../adapters/database/repositories/filing.repository.js';
 import { FilingStorage } from './storage.interface.js';
-import { LocalFilingStorage } from './local-storage.service.js';
+import { createFilingStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
 import { FilingType } from '../../types/edgar.types.js';
 
@@ -15,7 +15,7 @@ export class FilingParserService {
 
   constructor(storage?: FilingStorage) {
     this.filingRepo = new FilingRepository();
-    this.storage = storage || new LocalFilingStorage();
+    this.storage = storage || createFilingStorage();
     this.logger = getLogger();
   }
 

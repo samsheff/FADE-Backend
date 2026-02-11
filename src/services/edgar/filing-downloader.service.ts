@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { EdgarApiAdapter } from '../../adapters/edgar/edgar-api.adapter.js';
 import { FilingRepository } from '../../adapters/database/repositories/filing.repository.js';
 import { FilingStorage } from './storage.interface.js';
-import { LocalFilingStorage } from './local-storage.service.js';
+import { createFilingStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
 
 /**
@@ -18,7 +18,7 @@ export class FilingDownloaderService {
   constructor(storage?: FilingStorage) {
     this.edgarApi = new EdgarApiAdapter();
     this.filingRepo = new FilingRepository();
-    this.storage = storage || new LocalFilingStorage();
+    this.storage = storage || createFilingStorage();
     this.logger = getLogger();
   }
 

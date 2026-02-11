@@ -13,9 +13,14 @@ import { FactorCorrelationGenerator } from '../services/signals/generators/facto
 import { CrossEntityPropagationGenerator } from '../services/signals/generators/cross-entity-propagation.generator.js';
 import { ArbitrageBreakdownGenerator } from '../services/signals/generators/etf-arbitrage-breakdown.generator.js';
 import { APFragilityGenerator } from '../services/signals/generators/etf-ap-fragility.generator.js';
+import { LiquidityMismatchGenerator } from '../services/signals/generators/etf-liquidity-mismatch.generator.js';
+import { MicrostructureDeteriorationGenerator } from '../services/signals/generators/etf-microstructure-deterioration.generator.js';
+import { DisclosureDriftGenerator } from '../services/signals/generators/etf-disclosure-drift.generator.js';
 import { MarketRepository } from '../adapters/database/repositories/market.repository.js';
 import { InstrumentRepository } from '../adapters/database/repositories/instrument.repository.js';
 import { SignalRepository } from '../adapters/database/repositories/signal.repository.js';
+import { CandleRepository } from '../adapters/database/repositories/candle.repository.js';
+import { FilingRepository } from '../adapters/database/repositories/filing.repository.js';
 import { EtfNavDataService } from '../services/etf/etf-nav-data.service.js';
 import { EtfMetricsRepository } from '../adapters/database/repositories/etf-metrics.repository.js';
 import { getPrismaClient } from '../adapters/database/client.js';
@@ -48,6 +53,8 @@ export class SignalComputationJob {
     const instrumentRepo = new InstrumentRepository();
     const signalRepo = new SignalRepository();
     const etfMetricsRepo = new EtfMetricsRepository(prisma);
+    const candleRepo = new CandleRepository(prisma);
+    const filingRepo = new FilingRepository();
 
     // Instantiate services
     const priceTracker = new PriceTrackerService(marketRepo, instrumentRepo);
@@ -76,6 +83,23 @@ export class SignalComputationJob {
     );
     this.service.registerGenerator(
       new APFragilityGenerator(instrumentRepo, etfMetricsRepo)
+    );
+
+    // ETF Structural Signal Generators
+    this.service.registerGenerator(
+      new LiquidityMismatchGenerator(
+        instrumentRepo,
+        etfMetricsRepo,
+        etfNavService,
+        candleRepo,
+        filingRepo
+      )
+    );
+    this.service.registerGenerator(
+      new MicrostructureDeteriorationGenerator(instrumentRepo, candleRepo)
+    );
+    this.service.registerGenerator(
+      new DisclosureDriftGenerator(instrumentRepo, filingRepo)
     );
 
     logger.info('Signal computation job initialized', {

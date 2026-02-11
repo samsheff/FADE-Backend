@@ -41,6 +41,7 @@
     "@opensearch-project/opensearch": "^3.5.1",
     "@prisma/client": "^6.19.2",
     "axios": "^1.13.4",
+    "fastest-levenshtein": "^1.0.16",
     "fastify": "^5.7.2",
     "lru-cache": "^11.2.5",
     "pino": "^10.3.0",

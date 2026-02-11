@@ -269,3 +269,210 @@ export interface OneWayFlowEvidence extends EvidenceFact {
   /** Number of consecutive periods */
   consecutivePeriods: number;
 }
+
+/**
+ * Evidence: Liquidity mismatch between ETF and holdings
+ */
+export interface LiquidityMismatchEvidence extends EvidenceFact {
+  type: 'LIQUIDITY_MISMATCH';
+
+  /** Percentage of illiquid holdings in portfolio */
+  illiquidHoldingsPct: number;
+
+  /** Current premium/discount percentage */
+  premiumDiscountPct: number;
+
+  /** Volume z-score vs 30-day average */
+  volumeZScore: number;
+
+  /** Whether volume spike detected */
+  volumeSpike: boolean;
+
+  /** As-of date for this evidence */
+  asOfDate: Date;
+
+  /** Source filing ID (if from N-PORT) */
+  filingId: string | null;
+}
+
+/**
+ * Evidence: Flow shock with illiquid exposure
+ */
+export interface FlowShockEvidence extends EvidenceFact {
+  type: 'FLOW_SHOCK';
+
+  /** Net flow rate as percentage */
+  netFlowRate: number;
+
+  /** Current discount percentage */
+  discountPct: number;
+
+  /** Discount widening amount */
+  discountWidening: number;
+
+  /** Number of consecutive outflow days */
+  consecutiveOutflowDays: number;
+
+  /** Illiquid exposure percentage (if available) */
+  illiquidExposurePct: number | null;
+
+  /** As-of date */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: NAV tracking stress
+ */
+export interface TrackingStressEvidence extends EvidenceFact {
+  type: 'TRACKING_STRESS';
+
+  /** NAV deviation percentage */
+  navDeviationPct: number;
+
+  /** Volume increase ratio */
+  volumeIncreaseRatio: number;
+
+  /** Volatility increase ratio */
+  volatilityIncreaseRatio: number;
+
+  /** Recent 5-day volume average */
+  recentVolumeAvg: number;
+
+  /** Baseline 25-day volume average */
+  baselineVolumeAvg: number;
+
+  /** As-of date */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: Spread regime shift (future use)
+ */
+export interface SpreadRegimeShiftEvidence extends EvidenceFact {
+  type: 'SPREAD_REGIME_SHIFT';
+
+  /** Current spread in basis points */
+  currentSpreadBps: number;
+
+  /** 30-day mean spread */
+  mean30DaySpreadBps: number;
+
+  /** 30-day standard deviation */
+  stdDev30DaySpreadBps: number;
+
+  /** Z-score */
+  zScore: number;
+
+  /** Sample size */
+  sampleSize: number;
+
+  /** As-of date */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: Volatility regime shift
+ */
+export interface VolatilityRegimeShiftEvidence extends EvidenceFact {
+  type: 'VOLATILITY_REGIME_SHIFT';
+
+  /** Recent 20-day volatility */
+  recentVolatility20Day: number;
+
+  /** Baseline 60-day volatility */
+  baselineVolatility60Day: number;
+
+  /** Volatility ratio */
+  volatilityRatio: number;
+
+  /** As-of date */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: Impact asymmetry (sell pressure)
+ */
+export interface ImpactAsymmetryEvidence extends EvidenceFact {
+  type: 'IMPACT_ASYMMETRY';
+
+  /** Number of consecutive down days */
+  consecutiveDownsideDays: number;
+
+  /** Average red candle drop percentage */
+  avgRedCandleDropPct: number;
+
+  /** Average volume z-score */
+  avgVolumeZScore: number;
+
+  /** Total red candles analyzed */
+  totalRedCandles: number;
+
+  /** As-of date */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: Repeated disclosure of premium/discount issues
+ */
+export interface RepeatedDisclosureEvidence extends EvidenceFact {
+  type: 'REPEATED_DISCLOSURE';
+
+  /** Number of filings mentioning premium/discount */
+  filingsMentioningPremDisc: number;
+
+  /** Total mentions across filings */
+  totalMentions: number;
+
+  /** Filing IDs containing mentions */
+  filingIds: string[];
+
+  /** Number of filings reviewed */
+  lookbackFilings: number;
+
+  /** Keywords searched */
+  keywords: string[];
+}
+
+/**
+ * Evidence: Strategy drift in fund documentation
+ */
+export interface StrategyDriftEvidence extends EvidenceFact {
+  type: 'STRATEGY_DRIFT';
+
+  /** Prior filing ID */
+  priorFilingId: string;
+
+  /** Current filing ID */
+  currentFilingId: string;
+
+  /** Text similarity score (0-1) */
+  textSimilarity: number;
+
+  /** Whether index name changed */
+  indexNameChanged: boolean;
+
+  /** Whether objective changed */
+  objectiveChanged: boolean;
+
+  /** List of significant changes detected */
+  significantChanges: string[];
+}
+
+/**
+ * Evidence: Basket policy changes
+ */
+export interface BasketPolicyChangeEvidence extends EvidenceFact {
+  type: 'BASKET_POLICY_CHANGE';
+
+  /** Number of recent filings with mentions */
+  recentFilingsMentioning: number;
+
+  /** Total keyword mentions */
+  totalMentions: number;
+
+  /** Filing IDs with mentions */
+  filingIds: string[];
+
+  /** Keywords searched */
+  keywords: string[];
+}

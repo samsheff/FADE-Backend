@@ -3,6 +3,7 @@ import { FilingStorage } from './storage.interface.js';
 import { createFilingStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
 import { FilingType, FilingStatus } from '../../types/edgar.types.js';
+import { decodeHtmlEntities } from '../../utils/html-entities.js';
 
 /**
  * Filing Parser Service
@@ -121,21 +122,10 @@ export class FilingParserService {
   }
 
   /**
-   * Decode common HTML entities
+   * Decode HTML entities (delegated to shared utility)
    */
   private decodeHtmlEntities(text: string): string {
-    const entities: Record<string, string> = {
-      '&amp;': '&',
-      '&lt;': '<',
-      '&gt;': '>',
-      '&quot;': '"',
-      '&#39;': "'",
-      '&nbsp;': ' ',
-    };
-
-    return text.replace(/&[a-z]+;|&#\d+;/gi, (match) => {
-      return entities[match.toLowerCase()] || match;
-    });
+    return decodeHtmlEntities(text);
   }
 
   /**

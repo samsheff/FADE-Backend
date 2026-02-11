@@ -20,6 +20,7 @@ export class SearchIndexerJob {
   /**
    * Start the search indexer.
    * Initializes the index and performs a full initial index.
+   * Gracefully degrades if OpenSearch is unavailable.
    */
   async start(): Promise<void> {
     const logger = getLogger();
@@ -29,18 +30,29 @@ export class SearchIndexerJob {
       return;
     }
 
-    this.isRunning = true;
-
     try {
       logger.info('🔍 Starting search indexer job...');
+
+      // Check if OpenSearch is available
+      if (!esClient.isAvailable()) {
+        const error = esClient.getInitializationError();
+        logger.warn(
+          { error },
+          'OpenSearch is unavailable - search indexer running in degraded mode (indexing disabled)'
+        );
+        this.isRunning = true;
+        return;
+      }
 
       // Verify Elasticsearch connection
       const isConnected = await esClient.ping();
       if (!isConnected) {
-        throw new Error('Failed to connect to Elasticsearch');
+        logger.warn('OpenSearch ping failed - search indexer running in degraded mode (indexing disabled)');
+        this.isRunning = true;
+        return;
       }
 
-      logger.info('✅ Elasticsearch connection verified');
+      logger.info('✅ OpenSearch connection verified');
 
       // Initialize index (idempotent)
       await this.indexManager.initializeIndex();
@@ -55,10 +67,14 @@ export class SearchIndexerJob {
       await this.indexManager.refreshIndex();
 
       logger.info('✅ Search indexer initialization complete');
+      this.isRunning = true;
     } catch (error) {
-      logger.error({ error }, 'Failed to start search indexer');
-      this.isRunning = false;
-      throw error;
+      logger.warn(
+        { error },
+        'Search indexer failed to initialize - running in degraded mode (indexing disabled)'
+      );
+      // Don't throw - allow the service to run in degraded mode
+      this.isRunning = true;
     }
   }
 

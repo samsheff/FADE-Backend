@@ -5,6 +5,7 @@ import { NewsStorage } from './storage.interface.js';
 import { createNewsStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
 import { DocumentRecord } from '../../types/document.types.js';
+import { decodeHtmlEntities } from '../../utils/html-entities.js';
 
 /**
  * News Downloader Service
@@ -202,13 +203,8 @@ export class NewsDownloaderService {
     // Remove HTML tags
     text = text.replace(/<[^>]+>/g, ' ');
 
-    // Decode common HTML entities
-    text = text.replace(/&nbsp;/g, ' ');
-    text = text.replace(/&amp;/g, '&');
-    text = text.replace(/&lt;/g, '<');
-    text = text.replace(/&gt;/g, '>');
-    text = text.replace(/&quot;/g, '"');
-    text = text.replace(/&#39;/g, "'");
+    // Decode HTML entities using shared utility
+    text = decodeHtmlEntities(text);
 
     // Clean whitespace
     text = text.replace(/\s+/g, ' '); // Collapse whitespace

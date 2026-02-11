@@ -47,6 +47,13 @@ export class SearchIndexerService {
    * Index a single Polymarket market by ID.
    */
   async indexMarket(marketId: string): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.debug(`Search indexing unavailable, skipping market ${marketId}`);
+      return;
+    }
+
     try {
       const db = getPrismaClient();
       const market = await db.market.findUnique({
@@ -96,6 +103,13 @@ export class SearchIndexerService {
    * Auto-detects whether it's an equity or SEC issuer based on CIK.
    */
   async indexInstrument(instrumentId: string): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.debug(`Search indexing unavailable, skipping instrument ${instrumentId}`);
+      return;
+    }
+
     try {
       const db = getPrismaClient();
       const instrument = await db.instrument.findUnique({
@@ -162,6 +176,13 @@ export class SearchIndexerService {
    * Index all markets in batches.
    */
   async indexAllMarkets(): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.warn('Search indexing unavailable, skipping full market indexing');
+      return;
+    }
+
     const logger = getLogger();
     logger.info('Starting full market indexing...');
 
@@ -217,6 +238,13 @@ export class SearchIndexerService {
    * Index all instruments in batches.
    */
   async indexAllInstruments(): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.warn('Search indexing unavailable, skipping full instrument indexing');
+      return;
+    }
+
     const logger = getLogger();
     logger.info('Starting full instrument indexing...');
 
@@ -291,6 +319,13 @@ export class SearchIndexerService {
    * Index a single signal by ID.
    */
   async indexSignal(signalId: string): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.debug(`Search indexing unavailable, skipping signal ${signalId}`);
+      return;
+    }
+
     try {
       const db = getPrismaClient();
       const signal = await db.instrumentSignal.findUnique({
@@ -344,6 +379,13 @@ export class SearchIndexerService {
    * Index all active signals in batches.
    */
   async indexAllSignals(): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.warn('Search indexing unavailable, skipping signal indexing');
+      return;
+    }
+
     const logger = getLogger();
     logger.info('Starting signal indexing...');
 
@@ -409,6 +451,13 @@ export class SearchIndexerService {
    * Delete a document from the index.
    */
   async deleteDocument(entityId: string): Promise<void> {
+    // Check if search is available
+    if (!esClient.isAvailable()) {
+      const logger = getLogger();
+      logger.debug(`Search indexing unavailable, skipping deletion of document ${entityId}`);
+      return;
+    }
+
     const client = esClient.getClient();
     const indexName = this.indexManager.getIndexName();
 

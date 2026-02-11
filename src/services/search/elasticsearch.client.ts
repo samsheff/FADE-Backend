@@ -10,6 +10,8 @@ class ElasticsearchClient {
   private static instance: ElasticsearchClient | null = null;
   private client: Client | null = null;
   private indexPrefix: string = '';
+  private available: boolean = false;
+  private initializationError: Error | null = null;
 
   private constructor() {
     // Lazy initialization - client is created when first method is called
@@ -27,36 +29,73 @@ class ElasticsearchClient {
 
   /**
    * Initialize the OpenSearch client (called lazily on first use).
+   * Gracefully handles errors to allow service degradation.
    */
   private ensureInitialized(): void {
     if (this.client) {
       return; // Already initialized
     }
 
+    const logger = getLogger();
     const env = getEnvironment();
 
-    // Parse the OpenSearch URL to extract credentials
-    const url = new URL(env.ELASTICSEARCH_URL);
+    try {
+      // Parse the OpenSearch URL to extract credentials
+      const url = new URL(env.ELASTICSEARCH_URL);
 
-    this.client = new Client({
-      node: env.ELASTICSEARCH_URL,
-      ssl: {
-        rejectUnauthorized: true,
-      },
-    });
+      this.client = new Client({
+        node: env.ELASTICSEARCH_URL,
+        ssl: {
+          rejectUnauthorized: true,
+        },
+      });
 
-    this.indexPrefix = env.ELASTICSEARCH_INDEX_PREFIX;
+      this.indexPrefix = env.ELASTICSEARCH_INDEX_PREFIX;
+      this.available = true;
 
-    const logger = getLogger();
-    logger.info(`OpenSearch client initialized: ${url.host}`);
+      logger.info(`OpenSearch client initialized: ${url.host}`);
+    } catch (error) {
+      this.available = false;
+      this.initializationError = error as Error;
+
+      // Log detailed diagnostic information
+      if (error instanceof TypeError && (error.message.includes('Invalid URL') || error.message.includes('Failed to construct'))) {
+        logger.warn({ url: env.ELASTICSEARCH_URL }, 'OpenSearch URL is malformed - search indexing disabled');
+      } else if (error instanceof Error && error.message.includes('ECONNREFUSED')) {
+        logger.warn({ url: env.ELASTICSEARCH_URL }, 'OpenSearch server connection refused - search indexing disabled');
+      } else if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+        logger.warn({ url: env.ELASTICSEARCH_URL }, 'OpenSearch hostname not found - search indexing disabled');
+      } else {
+        logger.warn({ error }, 'OpenSearch initialization failed - search indexing disabled');
+      }
+    }
+  }
+
+  /**
+   * Check if OpenSearch is available.
+   */
+  isAvailable(): boolean {
+    this.ensureInitialized();
+    return this.available;
+  }
+
+  /**
+   * Get the initialization error if available.
+   */
+  getInitializationError(): Error | null {
+    return this.initializationError;
   }
 
   /**
    * Get the underlying OpenSearch client.
+   * Throws if client is not available.
    */
   getClient(): Client {
     this.ensureInitialized();
-    return this.client!;
+    if (!this.available || !this.client) {
+      throw new Error('OpenSearch client is not available');
+    }
+    return this.client;
   }
 
   /**

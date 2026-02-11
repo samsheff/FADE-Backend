@@ -7,6 +7,7 @@ import { RateLimiter } from '../../utils/rate-limiter.js';
 import { getEnvironment } from '../../config/environment.js';
 import { SearchIndexerService } from '../search/search-indexer.service.js';
 import { EtfDetector } from '../../utils/etf-detector.js';
+import { decodeHtmlEntities } from '../../utils/html-entities.js';
 
 interface SecCompanyTicker {
   cik_str: number;
@@ -212,29 +213,53 @@ export class EdgarUniverseDiscoveryService {
       for (const filer of batch) {
         try {
           const cik = String(filer.cik_str).padStart(10, '0');
-          const symbol = filer.ticker || this.generateSymbolFromName(filer.title);
-          const name = filer.title;
+
+          // Decode HTML entities in ticker and title from SEC data
+          const rawTicker = filer.ticker ? decodeHtmlEntities(filer.ticker.trim()) : '';
+          const rawTitle = decodeHtmlEntities(filer.title.trim());
+
+          // Clean up symbol: remove any trailing garbage like "(0" or " (CIK"
+          const symbol = this.cleanSymbol(rawTicker) || this.generateSymbolFromName(rawTitle);
+
+          // Clean up name: remove CIK suffix if present
+          const name = this.cleanCompanyName(rawTitle);
 
           // Check if issuer already exists
           const existing = await this.instrumentRepo.findByCik(cik);
 
           if (existing) {
-            // Update existing issuer (mark as active, update name if changed)
-            if (existing.name !== name) {
-              // Name changed - track as former name
-              const formerNames = (existing.formerNames as string[]) || [];
-              if (!formerNames.includes(existing.name)) {
-                formerNames.push(existing.name);
+            // Update existing issuer (mark as active, update name/symbol if changed)
+            const nameChanged = existing.name !== name;
+            const symbolChanged = existing.symbol !== symbol;
+
+            if (nameChanged || symbolChanged) {
+              const updateData: any = {
+                isActive: true,
+                metadataSource: 'EDGAR',
+              };
+
+              // Track name changes
+              if (nameChanged) {
+                const formerNames = (existing.formerNames as string[]) || [];
+                if (!formerNames.includes(existing.name)) {
+                  formerNames.push(existing.name);
+                }
+                updateData.name = name;
+                updateData.formerNames = formerNames;
+              }
+
+              // Update symbol if it's been cleaned/fixed
+              if (symbolChanged) {
+                updateData.symbol = symbol;
+                this.logger.debug(
+                  { cik, oldSymbol: existing.symbol, newSymbol: symbol },
+                  'Updating corrupted symbol'
+                );
               }
 
               await this.prisma.instrument.update({
                 where: { id: existing.id },
-                data: {
-                  name,
-                  formerNames,
-                  isActive: true,
-                  metadataSource: 'EDGAR',
-                },
+                data: updateData,
               });
 
               // Index instrument in search (don't block)
@@ -306,6 +331,39 @@ export class EdgarUniverseDiscoveryService {
     }
 
     return { newCount, updatedCount };
+  }
+
+  /**
+   * Clean ticker symbol by removing trailing garbage characters.
+   * Examples:
+   *   "NI(0" -> "NI"
+   *   "AAPL " -> "AAPL"
+   *   "MSFT(CIK" -> "MSFT"
+   */
+  private cleanSymbol(symbol: string): string {
+    if (!symbol) return '';
+
+    // Remove everything after (including) opening parenthesis
+    const cleaned = symbol.split('(')[0].trim();
+
+    // Remove non-alphanumeric characters except dots and dashes
+    return cleaned.replace(/[^A-Z0-9.\-]/gi, '').toUpperCase();
+  }
+
+  /**
+   * Clean company name by removing CIK suffix and extra whitespace.
+   * Examples:
+   *   "Novelis Inc. (CIK 0001304280)" -> "Novelis Inc."
+   *   "Apple Inc.  " -> "Apple Inc."
+   */
+  private cleanCompanyName(name: string): string {
+    if (!name) return '';
+
+    // Remove CIK suffix pattern: (CIK xxxxxxxx) or (CIK: xxxxxxxx)
+    const cleaned = name.replace(/\s*\(CIK:?\s*\d+\)/i, '').trim();
+
+    // Collapse multiple spaces
+    return cleaned.replace(/\s+/g, ' ');
   }
 
   /**

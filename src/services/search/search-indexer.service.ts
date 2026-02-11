@@ -485,17 +485,29 @@ export class SearchIndexerService {
    * Index a single document.
    */
   private async indexDocument(document: SearchDocument): Promise<void> {
-    const client = esClient.getClient();
-    const indexName = this.indexManager.getIndexName();
+    try {
+      const client = esClient.getClient();
+      const indexName = this.indexManager.getIndexName();
 
-    await client.index({
-      index: indexName,
-      id: document.entity_id,
-      document,
-    });
+      await client.index({
+        index: indexName,
+        id: document.entity_id,
+        document,
+      });
 
-    // Refresh index to make document searchable immediately
-    await this.indexManager.refreshIndex();
+      // Refresh index to make document searchable immediately
+      await this.indexManager.refreshIndex();
+    } catch (error: any) {
+      // If we get a ConfigurationError, the client is misconfigured
+      // Log and swallow the error to allow graceful degradation
+      if (error.name === 'ConfigurationError' || error.message?.includes('No Living connections')) {
+        const logger = getLogger();
+        logger.debug({ error }, 'OpenSearch unavailable during indexDocument, skipping');
+        return;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
@@ -506,19 +518,32 @@ export class SearchIndexerService {
       return;
     }
 
-    const client = esClient.getClient();
-    const indexName = this.indexManager.getIndexName();
+    try {
+      const client = esClient.getClient();
+      const indexName = this.indexManager.getIndexName();
 
-    const operations = documents.flatMap(doc => [
-      { index: { _index: indexName, _id: doc.entity_id } },
-      doc,
-    ]);
+      const operations = documents.flatMap(doc => [
+        { index: { _index: indexName, _id: doc.entity_id } },
+        doc,
+      ]);
 
-    const result = await client.bulk({ body: operations });
+      const result = await client.bulk({ body: operations });
 
-    if (result.errors) {
-      const erroredItems = result.items.filter((item: any) => item.index?.error);
-      logger.error({ erroredItems, errorCount: erroredItems.length }, `Bulk indexing had ${erroredItems.length} errors`);
+      if (result.errors) {
+        const erroredItems = result.items.filter((item: any) => item.index?.error);
+        const logger = getLogger();
+        logger.error({ erroredItems, errorCount: erroredItems.length }, `Bulk indexing had ${erroredItems.length} errors`);
+      }
+    } catch (error: any) {
+      // If we get a ConfigurationError, the client is misconfigured
+      // Log and swallow the error to allow graceful degradation
+      if (error.name === 'ConfigurationError' || error.message?.includes('No Living connections')) {
+        const logger = getLogger();
+        logger.debug({ error }, 'OpenSearch unavailable during bulkIndexDocuments, skipping');
+        return;
+      }
+      // Re-throw other errors
+      throw error;
     }
   }
 }

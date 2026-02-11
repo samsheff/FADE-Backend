@@ -52,10 +52,8 @@ jobs:
           script: |
             cd /opt/terminal-workers
 
-            # Download docker-compose file if not present
-            if [ ! -f docker-compose.yml ]; then
-              curl -sL https://raw.githubusercontent.com/samsheff/terminal/main/docker-compose.workers.yml -o docker-compose.yml
-            fi
+            # Always download latest docker-compose file
+            curl -fsSL https://raw.githubusercontent.com/samsheff/terminal/main/back/docker-compose.workers.yml -o docker-compose.yml
 
             # Set registry in .env if needed
             if ! grep -q "DOCKER_REGISTRY=" .env; then

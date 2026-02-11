@@ -80,7 +80,11 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
         return reply.send({ results });
       } catch (error) {
-        request.log.error({ error }, 'Autocomplete search failed');
+        request.log.error({
+          err: error,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }, 'Autocomplete search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',
@@ -150,7 +154,11 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
         return reply.send({ results, total });
       } catch (error) {
-        request.log.error({ error }, 'Full search failed');
+        request.log.error({
+          err: error,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }, 'Full search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',

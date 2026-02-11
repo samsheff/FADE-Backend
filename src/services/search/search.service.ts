@@ -257,7 +257,13 @@ export class SearchService {
       return { results, total };
     } catch (error) {
       const logger = getLogger();
-      logger.error({ error }, 'Search query failed');
+      logger.error({
+        err: error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        query,
+        options,
+      }, 'Search query failed');
       throw error;
     }
   }

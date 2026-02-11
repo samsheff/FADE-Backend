@@ -1,9 +1,9 @@
-import { Client } from '@elastic/elasticsearch';
+import { Client } from '@opensearch-project/opensearch';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 
 /**
- * Singleton Elasticsearch client for the trading terminal.
+ * Singleton OpenSearch client for the trading terminal.
  * Provides centralized access to the search cluster.
  */
 class ElasticsearchClient {
@@ -16,7 +16,7 @@ class ElasticsearchClient {
   }
 
   /**
-   * Get the singleton instance of the Elasticsearch client.
+   * Get the singleton instance of the OpenSearch client.
    */
   static getInstance(): ElasticsearchClient {
     if (!ElasticsearchClient.instance) {
@@ -26,7 +26,7 @@ class ElasticsearchClient {
   }
 
   /**
-   * Initialize the Elasticsearch client (called lazily on first use).
+   * Initialize the OpenSearch client (called lazily on first use).
    */
   private ensureInitialized(): void {
     if (this.client) {
@@ -35,20 +35,24 @@ class ElasticsearchClient {
 
     const env = getEnvironment();
 
+    // Parse the OpenSearch URL to extract credentials
+    const url = new URL(env.ELASTICSEARCH_URL);
+
     this.client = new Client({
       node: env.ELASTICSEARCH_URL,
-      maxRetries: 3,
-      requestTimeout: 30000,
+      ssl: {
+        rejectUnauthorized: true,
+      },
     });
 
     this.indexPrefix = env.ELASTICSEARCH_INDEX_PREFIX;
 
     const logger = getLogger();
-    logger.info(`Elasticsearch client initialized: ${env.ELASTICSEARCH_URL}`);
+    logger.info(`OpenSearch client initialized: ${url.host}`);
   }
 
   /**
-   * Get the underlying Elasticsearch client.
+   * Get the underlying OpenSearch client.
    */
   getClient(): Client {
     this.ensureInitialized();
@@ -64,7 +68,7 @@ class ElasticsearchClient {
   }
 
   /**
-   * Ping the Elasticsearch cluster to verify connection.
+   * Ping the OpenSearch cluster to verify connection.
    */
   async ping(): Promise<boolean> {
     try {
@@ -73,7 +77,7 @@ class ElasticsearchClient {
       return true;
     } catch (error) {
       const logger = getLogger();
-      logger.error({ error }, 'Elasticsearch ping failed');
+      logger.error({ error }, 'OpenSearch ping failed');
       return false;
     }
   }
@@ -88,13 +92,13 @@ class ElasticsearchClient {
       return health;
     } catch (error) {
       const logger = getLogger();
-      logger.error({ error }, 'Failed to get Elasticsearch cluster health');
+      logger.error({ error }, 'Failed to get OpenSearch cluster health');
       throw error;
     }
   }
 
   /**
-   * Close the Elasticsearch connection.
+   * Close the OpenSearch connection.
    */
   async close(): Promise<void> {
     try {
@@ -103,10 +107,10 @@ class ElasticsearchClient {
       }
       await this.client.close();
       const logger = getLogger();
-      logger.info('Elasticsearch client closed');
+      logger.info('OpenSearch client closed');
     } catch (error) {
       const logger = getLogger();
-      logger.error({ error }, 'Error closing Elasticsearch client');
+      logger.error({ error }, 'Error closing OpenSearch client');
       throw error;
     }
   }

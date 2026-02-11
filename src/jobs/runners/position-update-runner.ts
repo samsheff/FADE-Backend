@@ -9,7 +9,7 @@ import { PositionUpdateJob } from '../position-update.job.js';
  * Updates user positions from blockchain and CLOB API.
  */
 async function main(): Promise<void> {
-  const env = loadEnvironment();
+  loadEnvironment();
   const logger = createLogger();
 
   logger.info('💼 Starting Position Update Worker...');

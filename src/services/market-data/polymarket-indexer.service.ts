@@ -1,8 +1,7 @@
 import { MarketRepository } from '../../adapters/database/repositories/market.repository.js';
-import { OrderbookRepository } from '../../adapters/database/repositories/orderbook.repository.js';
 import { PolymarketAdapter } from '../../adapters/polymarket/polymarket.adapter.js';
 import { MarketCacheService } from './market-cache.service.js';
-import { MarketRecord, Orderbook } from '../../types/market.types.js';
+import { MarketRecord } from '../../types/market.types.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
 import type { MarketDataStreamService } from './market-data-stream.service.js';
@@ -19,7 +18,6 @@ interface SyncResult {
 export class PolymarketIndexer {
   private adapter: PolymarketAdapter;
   private marketRepo: MarketRepository;
-  private orderbookRepo: OrderbookRepository;
   private cache: MarketCacheService;
   private env;
   private logger;
@@ -32,7 +30,6 @@ export class PolymarketIndexer {
   constructor() {
     this.adapter = new PolymarketAdapter();
     this.marketRepo = new MarketRepository();
-    this.orderbookRepo = new OrderbookRepository();
     this.cache = new MarketCacheService();
     this.logger = getLogger();
     this.env = getEnvironment();
@@ -60,7 +57,7 @@ export class PolymarketIndexer {
     };
 
     this.logger.info('📥 Fetching all markets from Polymarket...');
-    let markets: ReturnType<PolymarketAdapter['getAllMarkets']>;
+    let markets: any;
     try {
       markets = await this.adapter.getAllMarkets();
       this.logger.info({ count: markets.length }, '✅ Fetched markets from Polymarket');
@@ -286,43 +283,7 @@ export class PolymarketIndexer {
       lastIndexedBlock: state.lastUpdatedBlock || currentBlock.toString(),
     };
   }
-
-  private async upsertSyntheticOrderbook(
-    marketId: string,
-    outcomes: string[],
-    market: Omit<MarketRecord, 'createdAt' | 'lastUpdated'>,
-  ): Promise<void> {
-    const env = getEnvironment();
-    const expiresAt = new Date(Date.now() + env.ORDERBOOK_SNAPSHOT_TTL_MS);
-
-    for (const outcome of outcomes) {
-      const orderbook = this.buildSyntheticOrderbook(market, outcome);
-      await this.orderbookRepo.upsertSnapshot({
-        marketId,
-        outcome,
-        bids: orderbook.bids,
-        asks: orderbook.asks,
-        expiresAt,
-      });
-    }
-  }
-
-  private buildSyntheticOrderbook(
-    market: Omit<MarketRecord, 'createdAt' | 'lastUpdated'>,
-    outcome: string,
-  ): Orderbook {
-    const price = outcome.toUpperCase() === 'YES' ? market.yesPrice : market.noPrice;
-    if (!price) {
-      return { bids: [], asks: [] };
-    }
-
-    const size = market.liquidity || '0';
-
-    return {
-      bids: [{ price, size }],
-      asks: [{ price, size }],
-    };
-  }
+  
 
   private invalidateCache(marketId: string, outcomes: string[]): void {
     this.cache.deleteMarket(marketId);

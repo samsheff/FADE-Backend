@@ -20,7 +20,7 @@ const optionalString = z.preprocess(
 const envSchema = z.object({
   // Server Configuration
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).pipe(z.number().int().positive()).default('3000'),
+  PORT: z.string().transform(Number).pipe(z.number().int().positive()).default(3000),
   HOST: z.string().default('0.0.0.0'),
 
   // Database
@@ -28,7 +28,7 @@ const envSchema = z.object({
 
   // Blockchain Configuration
   POLYGON_RPC_URL: z.string().url(),
-  POLYGON_CHAIN_ID: z.string().transform(Number).pipe(z.number().int()).default('137'),
+  POLYGON_CHAIN_ID: z.string().transform(Number).pipe(z.number().int()).default(137),
 
   // Polymarket CLOB API
   POLYMARKET_CLOB_API_URL: z.string().url().default('https://clob.polymarket.com'),
@@ -38,7 +38,7 @@ const envSchema = z.object({
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('2000'),
+    .default(2000),
   POLYMARKET_CLOB_WS_URL: optionalUrl,
   POLYMARKET_CLOB_API_KEY: optionalString,
   POLYMARKET_CLOB_API_SECRET: optionalString,
@@ -66,72 +66,72 @@ const envSchema = z.object({
     .default('0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'),
 
   // Rate Limiting
-  RATE_LIMIT_MAX: z.string().transform(Number).pipe(z.number().int().positive()).default('100'),
-  RATE_LIMIT_WINDOW: z.string().transform(Number).pipe(z.number().int().positive()).default('60000'),
+  RATE_LIMIT_MAX: z.string().transform(Number).pipe(z.number().int().positive()).default(100),
+  RATE_LIMIT_WINDOW: z.string().transform(Number).pipe(z.number().int().positive()).default(60000),
 
   // Security
-  NONCE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('300000'),
+  NONCE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(300000),
 
   // Caching
-  MARKET_CACHE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('60000'),
+  MARKET_CACHE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(60000),
   ORDERBOOK_CACHE_TTL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('30000'),
+    .default(30000),
   ORDERBOOK_SNAPSHOT_TTL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('30000'),
+    .default(30000),
 
   // CLOB WebSocket
   CLOB_WS_HEARTBEAT_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('15000'),
+    .default(15000),
   CLOB_WS_RECONNECT_BASE_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('1000'),
+    .default(1000),
   CLOB_WS_RECONNECT_MAX_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('30000'),
+    .default(30000),
 
   // Background Jobs
   MARKET_SYNC_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('60000'),
+    .default(60000),
   POSITION_UPDATE_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('300000'),
+    .default(300000),
 
   // Historical Data Backfill
   HISTORICAL_BACKFILL_RATE_LIMIT_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('1000'),
+    .default(1000),
   HISTORICAL_BACKFILL_BATCH_SIZE: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('5000'),
+    .default(5000),
 
   // Market Data Management
   AUTO_DEACTIVATE_CLOSED_MARKETS: z
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('false'),
+    .default(false),
 
   // ============================================================================
   // EDGAR Worker Configuration
@@ -141,19 +141,19 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('false'),
+    .default(false),
 
   EDGAR_SYNC_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('3600000'), // 1 hour
+    .default(3600000), // 1 hour
 
   EDGAR_UNIVERSE_SYNC_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('86400000'), // 24 hours
+    .default(86400000), // 24 hours
 
   EDGAR_STORAGE_PATH: z
     .string()
@@ -178,58 +178,58 @@ const envSchema = z.object({
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('100'), // 10 req/sec max per SEC guidelines
+    .default(100), // 10 req/sec max per SEC guidelines
 
   EDGAR_BATCH_SIZE: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('10'),
+    .default(10),
 
   // Discovery mode settings
   EDGAR_DISCOVERY_MODE: z
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
 
   // Historical Backfill Configuration
   EDGAR_BACKFILL_ENABLED: z
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
 
   EDGAR_BACKFILL_LOOKBACK_DAYS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('90'), // 90 days of historical data
+    .default(90), // 90 days of historical data
 
   EDGAR_BACKFILL_MAX_PAGES_PER_FORM: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('50'), // 50 pages × 100 = 5,000 filings max per form type
+    .default(50), // 50 pages × 100 = 5,000 filings max per form type
 
   // Signal computation thresholds (configurable)
   SIGNAL_DILUTION_SHELF_THRESHOLD_PCT: z
     .string()
     .transform(Number)
     .pipe(z.number())
-    .default('20'), // Shelf > 20% of market cap = HIGH
+    .default(20), // Shelf > 20% of market cap = HIGH
 
   SIGNAL_TOXIC_PRICE_THRESHOLD: z
     .string()
     .transform(Number)
     .pipe(z.number())
-    .default('2'), // Stock price < $2 = risk factor
+    .default(2), // Stock price < $2 = risk factor
 
   SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('12'),
+    .default(12),
 
   // ============================================================================
   // News Worker Configuration
@@ -239,13 +239,13 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('false'),
+    .default(false),
 
   NEWS_SYNC_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('3600000'), // 1 hour
+    .default(3600000), // 1 hour
 
   NEWS_STORAGE_PATH: z
     .string()
@@ -266,19 +266,19 @@ const envSchema = z.object({
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('20'),
+    .default(20),
 
   NEWS_BACKFILL_ENABLED: z
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
 
   NEWS_BACKFILL_LOOKBACK_DAYS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('7'), // 1 week of historical news
+    .default(7), // 1 week of historical news
 
   // Finnhub API Configuration
   FINNHUB_API_KEY: z
@@ -294,14 +294,14 @@ const envSchema = z.object({
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('1000'), // 1 req/sec = 60 req/min
+    .default(1000), // 1 req/sec = 60 req/min
 
   // Signal extraction thresholds
   SIGNAL_NEWS_MIN_CONFIDENCE: z
     .string()
     .transform(Number)
     .pipe(z.number())
-    .default('0.7'),
+    .default(0.7),
 
   // ============================================================================
   // Entity Enrichment Configuration
@@ -311,19 +311,19 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
 
   ENTITY_ENRICHMENT_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('604800000'), // 7 days (weekly)
+    .default(604800000), // 7 days (weekly)
 
   ENTITY_ENRICHMENT_BATCH_SIZE: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('100'),
+    .default(100),
 
   // ============================================================================
   // Signal Computation Configuration
@@ -333,25 +333,25 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
 
   SIGNAL_COMPUTATION_INTERVAL_MS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('900000'), // 15 minutes
+    .default(900000), // 15 minutes
 
   SIGNAL_MIN_CONFIDENCE_THRESHOLD: z
     .string()
     .transform(Number)
     .pipe(z.number())
-    .default('0.6'),
+    .default(0.6),
 
   SIGNAL_EXPIRATION_DAYS: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('7'),
+    .default(7),
 
   // ============================================================================
   // Elasticsearch Configuration
@@ -363,12 +363,12 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .pipe(z.boolean())
-    .default('true'),
+    .default(true),
   SEARCH_INDEXER_BATCH_SIZE: z
     .string()
     .transform(Number)
     .pipe(z.number().int().positive())
-    .default('100'),
+    .default(100),
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

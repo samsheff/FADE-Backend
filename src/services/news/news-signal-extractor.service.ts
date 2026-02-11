@@ -220,7 +220,7 @@ export class NewsSignalExtractorService {
    * @returns Array of extracted signals
    */
   private async extractSignals(
-    document: DocumentRecord,
+    _document: DocumentRecord,
     content: string,
   ): Promise<ExtractedSignal[]> {
     const signals: ExtractedSignal[] = [];

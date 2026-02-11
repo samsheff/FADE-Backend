@@ -2,7 +2,7 @@ import { FilingRepository } from '../../adapters/database/repositories/filing.re
 import { FilingStorage } from './storage.interface.js';
 import { createFilingStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
-import { FilingType } from '../../types/edgar.types.js';
+import { FilingType, FilingStatus } from '../../types/edgar.types.js';
 
 /**
  * Filing Parser Service
@@ -27,7 +27,7 @@ export class FilingParserService {
   async parseDownloadedFilings(limit = 10): Promise<number> {
     this.logger.info({ limit }, 'Parsing downloaded filings');
 
-    const downloaded = await this.filingRepo.findByStatus('DOWNLOADED', limit);
+    const downloaded = await this.filingRepo.findByStatus(FilingStatus.DOWNLOADED, limit);
 
     if (downloaded.length === 0) {
       this.logger.debug('No downloaded filings to parse');
@@ -62,7 +62,7 @@ export class FilingParserService {
         });
 
         // Update filing status
-        await this.filingRepo.updateStatus(filing.id, 'PARSED', {
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.PARSED, {
           parsedAt: new Date(),
         });
 
@@ -85,7 +85,7 @@ export class FilingParserService {
           'Failed to parse filing',
         );
 
-        await this.filingRepo.updateStatus(filing.id, 'FAILED', {
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.FAILED, {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }

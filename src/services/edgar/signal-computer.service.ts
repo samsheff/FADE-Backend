@@ -3,7 +3,7 @@ import { InstrumentRepository } from '../../adapters/database/repositories/instr
 import { SignalRepository } from '../../adapters/database/repositories/signal.repository.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
-import { SignalType, SignalSeverity, FactType } from '../../types/edgar.types.js';
+import { SignalType, SignalSeverity, FactType, FilingStatus } from '../../types/edgar.types.js';
 
 /**
  * Signal Computer Service
@@ -32,7 +32,7 @@ export class SignalComputerService {
     try {
       // Get all enriched filings
       const enrichedFilings = await this.filingRepo.findMany({
-        status: 'ENRICHED',
+        status: FilingStatus.ENRICHED,
         limit: 100,
       });
 

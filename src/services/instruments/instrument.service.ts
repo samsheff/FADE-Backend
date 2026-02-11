@@ -78,10 +78,10 @@ export class InstrumentService {
   /**
    * Helper: Get CIK for instrument
    */
-  private async getCikForInstrument(instrumentId: string): Promise<string | null> {
+  private async getCikForInstrument(_instrumentId: string): Promise<string | null> {
     // This would need to query instrument_identifiers table
     // For now, simplified implementation
-    const instrument = await this.instrumentRepo.findById(instrumentId);
+    // instrument lookup not needed
 
     // In a full implementation, we'd join with identifiers
     // For now, return null and handle in the repo layer

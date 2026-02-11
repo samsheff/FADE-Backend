@@ -59,7 +59,7 @@ export async function getMarketsRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (request): Promise<MarketListResponse> => {
-      const { active, category, limit: limitStr, offset: offsetStr } = request.query;
+      const { category, limit: limitStr, offset: offsetStr } = request.query;
 
       const { limit, offset } = validatePagination(
         limitStr ? parseInt(limitStr) : undefined,

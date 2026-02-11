@@ -18,7 +18,7 @@ import { MarketDataStreamService } from '../../services/market-data/market-data-
  * - Store market data and orderbook snapshots in database
  */
 async function main(): Promise<void> {
-  const env = loadEnvironment();
+  loadEnvironment();
   const logger = createLogger();
 
   logger.info('🔄 Starting Market Sync Worker...');

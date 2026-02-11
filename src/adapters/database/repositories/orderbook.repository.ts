@@ -1,6 +1,7 @@
 import { PrismaClient, OrderbookSnapshot as PrismaOrderbookSnapshot } from '@prisma/client';
 import { getPrismaClient } from '../client.js';
 import { OrderbookSnapshot } from '../../../types/market.types.js';
+import { toJsonValue } from '../../../utils/prisma-json.js';
 
 export class OrderbookRepository {
   private prisma: PrismaClient;
@@ -36,13 +37,13 @@ export class OrderbookRepository {
       create: {
         marketId: snapshot.marketId,
         outcome: snapshot.outcome,
-        bids: snapshot.bids,
-        asks: snapshot.asks,
+        bids: toJsonValue(snapshot.bids),
+        asks: toJsonValue(snapshot.asks),
         expiresAt: snapshot.expiresAt,
       },
       update: {
-        bids: snapshot.bids,
-        asks: snapshot.asks,
+        bids: toJsonValue(snapshot.bids),
+        asks: toJsonValue(snapshot.asks),
         expiresAt: snapshot.expiresAt,
       },
     });

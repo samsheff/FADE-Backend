@@ -146,7 +146,7 @@ export class IndexManagerService {
       logger.info(`Created index ${indexName} with autocomplete mappings`);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to initialize index ${indexName}:`, error);
+      logger.error({ error, indexName }, `Failed to initialize index ${indexName}`);
       throw error;
     }
   }
@@ -164,7 +164,7 @@ export class IndexManagerService {
       logger.debug(`Refreshed index ${indexName}`);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to refresh index ${indexName}:`, error);
+      logger.error({ error, indexName }, `Failed to refresh index ${indexName}`);
       throw error;
     }
   }
@@ -186,7 +186,7 @@ export class IndexManagerService {
       }
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to delete index ${indexName}:`, error);
+      logger.error({ error, indexName }, `Failed to delete index ${indexName}`);
       throw error;
     }
   }

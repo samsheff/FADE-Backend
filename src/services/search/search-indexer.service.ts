@@ -86,7 +86,7 @@ export class SearchIndexerService {
       logger.debug(`Indexed market ${marketId}`);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to index market ${marketId}:`, error);
+      logger.error({ error, marketId }, `Failed to index market ${marketId}`);
       throw error;
     }
   }
@@ -153,7 +153,7 @@ export class SearchIndexerService {
       logger.debug(`Indexed ${entityType} instrument ${instrumentId}`);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to index instrument ${instrumentId}:`, error);
+      logger.error({ error, instrumentId }, `Failed to index instrument ${instrumentId}`);
       throw error;
     }
   }
@@ -335,7 +335,7 @@ export class SearchIndexerService {
       await this.indexDocument(document);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to index signal ${signalId}:`, error);
+      logger.error({ error, signalId }, `Failed to index signal ${signalId}`);
       throw error;
     }
   }
@@ -427,7 +427,7 @@ export class SearchIndexerService {
         return;
       }
 
-      logger.error(`Failed to delete document ${entityId}:`, error);
+      logger.error({ error, entityId }, `Failed to delete document ${entityId}`);
       throw error;
     }
   }
@@ -469,7 +469,7 @@ export class SearchIndexerService {
 
     if (result.errors) {
       const erroredItems = result.items.filter((item: any) => item.index?.error);
-      logger.error(`Bulk indexing had ${erroredItems.length} errors:`, erroredItems);
+      logger.error({ erroredItems, errorCount: erroredItems.length }, `Bulk indexing had ${erroredItems.length} errors`);
     }
   }
 }

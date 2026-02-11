@@ -9,7 +9,6 @@ export class MarketSyncJob {
   private historicalSync: HistoricalMarketDataSync;
   private logger;
   private intervalId: NodeJS.Timeout | null = null;
-  private streamService: MarketDataStreamService | null = null;
 
   constructor() {
     this.indexer = new PolymarketIndexer();
@@ -21,7 +20,7 @@ export class MarketSyncJob {
   }
 
   setStreamService(streamService: MarketDataStreamService): void {
-    this.streamService = streamService;
+    this._streamService = streamService;
     this.indexer.setStreamService(streamService);
   }
 

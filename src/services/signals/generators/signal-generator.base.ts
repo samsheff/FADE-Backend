@@ -59,13 +59,13 @@ export abstract class SignalGeneratorBase {
     const weightedScore = score * confidence;
 
     if (weightedScore >= 80) {
-      return 'CRITICAL';
+      return SignalSeverity.CRITICAL;
     } else if (weightedScore >= 60) {
-      return 'HIGH';
+      return SignalSeverity.HIGH;
     } else if (weightedScore >= 40) {
-      return 'MEDIUM';
+      return SignalSeverity.MEDIUM;
     } else {
-      return 'LOW';
+      return SignalSeverity.LOW;
     }
   }
 

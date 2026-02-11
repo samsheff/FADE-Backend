@@ -73,7 +73,7 @@ class ElasticsearchClient {
       return true;
     } catch (error) {
       const logger = getLogger();
-      logger.error('Elasticsearch ping failed:', error);
+      logger.error({ error }, 'Elasticsearch ping failed');
       return false;
     }
   }
@@ -88,7 +88,7 @@ class ElasticsearchClient {
       return health;
     } catch (error) {
       const logger = getLogger();
-      logger.error('Failed to get Elasticsearch cluster health:', error);
+      logger.error({ error }, 'Failed to get Elasticsearch cluster health');
       throw error;
     }
   }
@@ -106,7 +106,7 @@ class ElasticsearchClient {
       logger.info('Elasticsearch client closed');
     } catch (error) {
       const logger = getLogger();
-      logger.error('Error closing Elasticsearch client:', error);
+      logger.error({ error }, 'Error closing Elasticsearch client');
       throw error;
     }
   }

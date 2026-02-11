@@ -4,7 +4,6 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { getEnvironment } from '../config/environment.js';
-import { getLogger } from '../utils/logger.js';
 import { AppError } from '../utils/errors.js';
 import type { ZodError } from 'zod';
 

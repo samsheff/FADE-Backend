@@ -56,7 +56,7 @@ export class SearchIndexerJob {
 
       logger.info('✅ Search indexer initialization complete');
     } catch (error) {
-      logger.error('Failed to start search indexer:', error);
+      logger.error({ error }, 'Failed to start search indexer');
       this.isRunning = false;
       throw error;
     }
@@ -70,7 +70,7 @@ export class SearchIndexerJob {
       await this.indexer.indexMarket(marketId);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to incrementally index market ${marketId}:`, error);
+      logger.error({ error, marketId }, `Failed to incrementally index market ${marketId}`);
     }
   }
 
@@ -82,7 +82,7 @@ export class SearchIndexerJob {
       await this.indexer.indexInstrument(instrumentId);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to incrementally index instrument ${instrumentId}:`, error);
+      logger.error({ error, instrumentId }, `Failed to incrementally index instrument ${instrumentId}`);
     }
   }
 
@@ -94,7 +94,7 @@ export class SearchIndexerJob {
       await this.indexer.indexSignal(signalId);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to incrementally index signal ${signalId}:`, error);
+      logger.error({ error, signalId }, `Failed to incrementally index signal ${signalId}`);
     }
   }
 
@@ -106,7 +106,7 @@ export class SearchIndexerJob {
       await this.indexer.deleteDocument(entityId);
     } catch (error) {
       const logger = getLogger();
-      logger.error(`Failed to delete document ${entityId}:`, error);
+      logger.error({ error, entityId }, `Failed to delete document ${entityId}`);
     }
   }
 

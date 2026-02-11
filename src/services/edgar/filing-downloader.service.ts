@@ -4,6 +4,7 @@ import { FilingRepository } from '../../adapters/database/repositories/filing.re
 import { FilingStorage } from './storage.interface.js';
 import { createFilingStorage } from './storage.factory.js';
 import { getLogger } from '../../utils/logger.js';
+import { FilingStatus } from '../../types/edgar.types.js';
 
 /**
  * Filing Downloader Service
@@ -30,7 +31,7 @@ export class FilingDownloaderService {
   async processPendingFilings(limit = 10): Promise<number> {
     this.logger.info({ limit }, 'Processing pending filings');
 
-    const pending = await this.filingRepo.findByStatus('PENDING', limit);
+    const pending = await this.filingRepo.findByStatus(FilingStatus.PENDING, limit);
 
     if (pending.length === 0) {
       this.logger.debug('No pending filings to download');
@@ -42,7 +43,7 @@ export class FilingDownloaderService {
     for (const filing of pending) {
       try {
         // Update status to DOWNLOADING
-        await this.filingRepo.updateStatus(filing.id, 'DOWNLOADING');
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.DOWNLOADING);
 
         // Download filing content
         const content = await this.edgarApi.downloadFiling(
@@ -63,7 +64,7 @@ export class FilingDownloaderService {
         await this.storage.save(storagePath, content);
 
         // Update filing status
-        await this.filingRepo.updateStatus(filing.id, 'DOWNLOADED', {
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.DOWNLOADED, {
           storagePath,
           contentHash: hash,
           downloadedAt: new Date(),
@@ -90,7 +91,7 @@ export class FilingDownloaderService {
         );
 
         // Update status to FAILED
-        await this.filingRepo.updateStatus(filing.id, 'FAILED', {
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.FAILED, {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }

@@ -6,7 +6,7 @@ import { getPrismaClient } from '../adapters/database/client.js';
  * Used by App Platform, load balancers, and monitoring systems
  */
 export async function healthRoute(app: FastifyInstance): Promise<void> {
-  app.get('/health', async (request, reply) => {
+  app.get('/health', async (_request, reply) => {
     try {
       // Check database connectivity
       const prisma = getPrismaClient();

@@ -14,7 +14,6 @@ import type {
   GeneratedSignal,
   ComputationJobStats,
 } from './types/generator.types.js';
-import { env } from '../../config/environment.js';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -23,16 +22,14 @@ import { logger } from '../../utils/logger.js';
 export class SignalComputationService {
   private readonly generators: SignalGeneratorBase[] = [];
   private readonly priceTracker: PriceTrackerService;
-  private readonly factorPrices: FactorPriceService;
   private readonly signalRepo: SignalRepository;
 
   constructor(
     priceTracker: PriceTrackerService,
-    factorPrices: FactorPriceService,
+    _factorPrices: FactorPriceService,
     signalRepo: SignalRepository
   ) {
     this.priceTracker = priceTracker;
-    this.factorPrices = factorPrices;
     this.signalRepo = signalRepo;
   }
 

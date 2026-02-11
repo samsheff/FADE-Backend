@@ -6,6 +6,7 @@ import type {
   IndustryType,
   FactorType,
 } from '../../types/document.types.js';
+import { FilingStatus } from '../../types/edgar.types.js';
 
 interface FactorConfig {
   factorType: FactorType;
@@ -154,7 +155,7 @@ export class FactorMappingService {
       if (instrument?.cik) {
         try {
           const filings = await this.filingRepo.findByCik(instrument.cik, {
-            status: 'ENRICHED',
+            status: FilingStatus.ENRICHED,
             limit: 1,
           });
 

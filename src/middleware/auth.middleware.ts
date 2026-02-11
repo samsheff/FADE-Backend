@@ -38,7 +38,7 @@ export async function authMiddleware(
     Params: { wallet?: string };
     Body?: { wallet?: string; walletAddress?: string };
   }>,
-  reply: FastifyReply,
+  _reply: FastifyReply,
 ): Promise<void> {
   try {
     const authHeader = request.headers.authorization;

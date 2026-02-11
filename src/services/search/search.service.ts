@@ -257,7 +257,7 @@ export class SearchService {
       return { results, total };
     } catch (error) {
       const logger = getLogger();
-      logger.error('Search query failed:', error);
+      logger.error({ error }, 'Search query failed');
       throw error;
     }
   }

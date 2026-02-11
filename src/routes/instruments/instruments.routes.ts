@@ -116,7 +116,7 @@ export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
         description: 'Get signals for an instrument',
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const signals = await instrumentService.getSignalsForInstrument(request.params.id);
       return { signals };
     },
@@ -230,7 +230,7 @@ export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const { id } = request.params;
 
       // Get latest signal for this instrument
@@ -266,7 +266,7 @@ export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
 
       // Helper to construct SEC URL
       const constructSECUrl = (filing: any): string => {
-        const accessionNoSlash = filing.accessionNumber.replace(/-/g, '');
+        // const accessionNoSlash = filing.accessionNumber.replace(/-/g, '');
         return `https://www.sec.gov/cgi-bin/viewer?action=view&cik=${filing.cik}&accession_number=${filing.accessionNumber}&xbrl_type=v`;
       };
 

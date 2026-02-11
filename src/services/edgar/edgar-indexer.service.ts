@@ -328,7 +328,7 @@ export class EdgarIndexerService {
     }
 
     // Update lastFilingAt for each issuer
-    for (const [cik, filingDate] of filingsByCik) {
+    for (const [cik, _filingDate] of filingsByCik) {
       try {
         const instrument = await this.instrumentRepo.findByCik(cik);
         if (instrument) {

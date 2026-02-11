@@ -14,6 +14,7 @@ import {
 } from '../../../types/document.types.js';
 import { FilingStatus } from '../../../types/edgar.types.js';
 import { getPrismaClient } from '../client.js';
+import { toJsonValue } from '../../../utils/prisma-json.js';
 
 export class DocumentRepository {
   private prisma: PrismaClient;
@@ -125,7 +126,7 @@ export class DocumentRepository {
         sourceUrl: input.sourceUrl || null,
         title: input.title,
         publishedAt: input.publishedAt,
-        metadata: input.metadata || null,
+        metadata: toJsonValue(input.metadata),
         status: 'PENDING',
       },
     });
@@ -179,7 +180,7 @@ export class DocumentRepository {
       data: {
         documentId: input.documentId,
         fullText: input.fullText,
-        structured: input.structured || null,
+        structured: toJsonValue(input.structured),
         wordCount: input.wordCount,
       },
     });
@@ -262,7 +263,7 @@ export class DocumentRepository {
       data: {
         documentId: input.documentId,
         factType: input.factType as any,
-        data: input.data,
+        data: toJsonValue(input.data),
         evidence: input.evidence || null,
         confidence: input.confidence || 1.0,
       },

@@ -1,4 +1,4 @@
-import { createPublicClient, http, isAddress, parseAbi } from 'viem';
+import { createPublicClient, http, isAddress } from 'viem';
 import { polygon } from 'viem/chains';
 import { getEnvironment } from '../../config/environment.js';
 import { ERC20_ABI } from '../../config/constants.js';

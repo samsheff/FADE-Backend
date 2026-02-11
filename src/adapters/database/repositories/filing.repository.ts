@@ -9,6 +9,7 @@ import {
   FilingStatus,
 } from '../../../types/edgar.types.js';
 import { getPrismaClient } from '../client.js';
+import { toJsonValue } from '../../../utils/prisma-json.js';
 
 export class FilingRepository {
   private prisma: PrismaClient;
@@ -176,8 +177,8 @@ export class FilingRepository {
       data: {
         filingId,
         fullText: content.fullText,
-        sections: content.sections || null,
-        exhibits: content.exhibits || null,
+        sections: toJsonValue(content.sections),
+        exhibits: toJsonValue(content.exhibits),
         wordCount: content.fullText.split(/\s+/).length,
       },
     });
@@ -205,7 +206,7 @@ export class FilingRepository {
       data: {
         filingId: fact.filingId,
         factType: fact.factType as any,
-        data: fact.data,
+        data: toJsonValue(fact.data),
         evidence: fact.evidence || null,
         confidence: fact.confidence || 1.0,
       },

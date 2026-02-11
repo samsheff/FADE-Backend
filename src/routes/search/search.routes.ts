@@ -82,7 +82,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         return reply.send({ results });
       } catch (error) {
         const logger = getLogger();
-        logger.error('Autocomplete search failed:', error);
+        logger.error({ error }, 'Autocomplete search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',
@@ -153,7 +153,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         return reply.send({ results, total });
       } catch (error) {
         const logger = getLogger();
-        logger.error('Full search failed:', error);
+        logger.error({ error }, 'Full search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',

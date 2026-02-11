@@ -3,7 +3,7 @@ import { getLogger } from '../../utils/logger.js';
 import { ExternalApiError, MarketNotFoundError } from '../../utils/errors.js';
 import { Market } from '../../types/market.types.js';
 import { Orderbook, OrderbookLevel } from '../../types/market.types.js';
-import { normalizeOutcomes, getOriginalOutcome } from '../../utils/outcome-normalization.utils.js';
+import { normalizeOutcomes } from '../../utils/outcome-normalization.utils.js';
 
 interface PolymarketMarketResponse {
   condition_id: string;

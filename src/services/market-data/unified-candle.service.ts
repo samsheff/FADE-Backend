@@ -102,7 +102,7 @@ export class UnifiedCandleService {
    * Uses request coalescing to prevent duplicate concurrent fetches
    */
   private async getInstrumentCandles(params: UnifiedCandleParams): Promise<CandleOutput[]> {
-    const { instrumentId, interval, from, to, limit } = params;
+    const { instrumentId, interval, from, to } = params;
 
     if (!instrumentId) {
       throw new Error('instrumentId is required for instrument candles');
@@ -140,7 +140,7 @@ export class UnifiedCandleService {
    * Internal implementation of instrument candle fetching
    */
   private async fetchInstrumentCandlesImpl(params: UnifiedCandleParams): Promise<CandleOutput[]> {
-    const { instrumentId, interval, from, to, limit } = params;
+    const { instrumentId, interval, from, to } = params;
 
     if (!instrumentId) {
       throw new Error('instrumentId is required for instrument candles');

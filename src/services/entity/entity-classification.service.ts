@@ -6,6 +6,7 @@ import type {
   IndustryType,
   SectorType,
 } from '../../types/document.types.js';
+import { FilingStatus } from '../../types/edgar.types.js';
 
 /**
  * Keyword mapping for industry classification
@@ -215,7 +216,7 @@ export class EntityClassificationService {
       if (instrument.cik) {
         try {
           const filings = await this.filingRepo.findByCik(instrument.cik, {
-            status: 'ENRICHED',
+            status: FilingStatus.ENRICHED,
             limit: 1,
           });
 

@@ -1,6 +1,6 @@
 import { FilingRepository } from '../../adapters/database/repositories/filing.repository.js';
 import { getLogger } from '../../utils/logger.js';
-import { FactType } from '../../types/edgar.types.js';
+import { FactType, FilingStatus } from '../../types/edgar.types.js';
 
 interface FactMatch {
   factType: FactType;
@@ -95,7 +95,7 @@ export class FactExtractorService {
   async extractFactsFromParsedFilings(limit = 10): Promise<number> {
     this.logger.info({ limit }, 'Extracting facts from parsed filings');
 
-    const parsed = await this.filingRepo.findByStatus('PARSED', limit);
+    const parsed = await this.filingRepo.findByStatus(FilingStatus.PARSED, limit);
 
     if (parsed.length === 0) {
       this.logger.debug('No parsed filings to extract facts from');
@@ -143,7 +143,7 @@ export class FactExtractorService {
         }
 
         // Update filing status to ENRICHED
-        await this.filingRepo.updateStatus(filing.id, 'ENRICHED');
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.ENRICHED);
 
         successCount++;
       } catch (error) {
@@ -155,7 +155,7 @@ export class FactExtractorService {
           'Failed to extract facts',
         );
 
-        await this.filingRepo.updateStatus(filing.id, 'FAILED', {
+        await this.filingRepo.updateStatus(filing.id, FilingStatus.FAILED, {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }

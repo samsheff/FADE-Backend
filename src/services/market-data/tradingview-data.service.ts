@@ -56,8 +56,8 @@ export class TradingViewDataService {
     instrumentId: string,
     symbol: string,
     interval: string,
-    from: Date,
-    to: Date,
+    _from: Date,
+    _to: Date,
   ): Promise<TradingViewCandle[]> {
     if (!this.client) {
       this.logger.warn(
@@ -80,7 +80,7 @@ export class TradingViewDataService {
         const chart = new this.client.Session.Chart();
 
         let periods: any[] = [];
-        let hasLoaded = false;
+        
 
         // Set up error handler
         chart.onError((...err: any[]) => {
@@ -91,7 +91,7 @@ export class TradingViewDataService {
 
         // When symbol loads successfully
         chart.onSymbolLoaded(() => {
-          hasLoaded = true;
+          // successfully loaded
           this.logger.debug({ symbol }, 'TradingView symbol loaded');
         });
 

@@ -13,12 +13,10 @@ export interface InstrumentPricingSummary {
 }
 
 export class InstrumentPricingSummaryService {
-  private prisma: PrismaClient;
   private logger;
   private candleService: UnifiedCandleService;
 
-  constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
+  constructor(_prisma: PrismaClient) {
     this.logger = getLogger();
     this.candleService = new UnifiedCandleService();
   }

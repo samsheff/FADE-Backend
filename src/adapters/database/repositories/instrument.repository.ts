@@ -121,6 +121,7 @@ export class InstrumentRepository {
         symbol: input.symbol,
         name: input.name,
         exchange: input.exchange || null,
+        tvSymbol: input.tvSymbol || null,
         lastPrice: input.lastPrice || null,
         bidPrice: input.bidPrice || null,
         askPrice: input.askPrice || null,
@@ -235,6 +236,28 @@ export class InstrumentRepository {
     });
 
     return identifier ? this.toModel(identifier.instrument) : null;
+  }
+
+  /**
+   * Update TradingView symbol and exchange for an instrument
+   */
+  async updateTvSymbol(
+    instrumentId: string,
+    tvSymbol: string,
+    exchange?: string,
+  ): Promise<void> {
+    await this.prisma.instrument.update({
+      where: { id: instrumentId },
+      data: {
+        tvSymbol,
+        ...(exchange && { exchange }),
+      },
+    });
+
+    this.logger?.info(
+      { instrumentId, tvSymbol, exchange },
+      'TradingView symbol updated',
+    );
   }
 
   async fuzzySearchByName(
@@ -589,6 +612,7 @@ export class InstrumentRepository {
       symbol: prismaInstrument.symbol,
       name: prismaInstrument.name,
       exchange: prismaInstrument.exchange,
+      tvSymbol: prismaInstrument.tvSymbol,
       lastPrice: prismaInstrument.lastPrice ? prismaInstrument.lastPrice.toString() : null,
       bidPrice: prismaInstrument.bidPrice ? prismaInstrument.bidPrice.toString() : null,
       askPrice: prismaInstrument.askPrice ? prismaInstrument.askPrice.toString() : null,

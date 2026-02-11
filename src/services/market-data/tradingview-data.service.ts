@@ -46,10 +46,11 @@ export class TradingViewDataService {
    * Fetch historical candles from TradingView
    *
    * @param instrumentId - Internal instrument ID
-   * @param symbol - Ticker symbol (e.g., 'AAPL', 'NASDAQ:AAPL')
+   * @param symbol - Ticker symbol (e.g., 'AAPL')
    * @param interval - Internal interval format ('1m', '5m', '1h', '1d')
    * @param from - Start date
    * @param to - End date
+   * @param tvSymbol - Optional resolved TradingView symbol (e.g., 'NASDAQ:AAPL')
    * @returns Array of normalized candles
    */
   async fetchHistoricalCandles(
@@ -58,6 +59,7 @@ export class TradingViewDataService {
     interval: string,
     _from: Date,
     _to: Date,
+    tvSymbol?: string | null,
   ): Promise<TradingViewCandle[]> {
     if (!this.client) {
       this.logger.warn(
@@ -71,8 +73,11 @@ export class TradingViewDataService {
       try {
         const tvInterval = this.mapIntervalToTradingView(interval);
 
+        // Use resolved TradingView symbol if available, otherwise use bare symbol
+        const marketSymbol = tvSymbol || symbol;
+
         this.logger.debug(
-          { symbol, interval: tvInterval },
+          { bareSymbol: symbol, marketSymbol, tvSymbol, interval: tvInterval },
           'Fetching TradingView historical data',
         );
 
@@ -102,8 +107,8 @@ export class TradingViewDataService {
           }
         });
 
-        // Set the market
-        chart.setMarket(symbol, {
+        // Set the market using resolved symbol
+        chart.setMarket(marketSymbol, {
           timeframe: tvInterval,
         });
 

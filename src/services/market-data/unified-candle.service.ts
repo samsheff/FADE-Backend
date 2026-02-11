@@ -8,6 +8,7 @@
 
 import { CandleAggregator } from './candle-aggregator.service.js';
 import { TradingViewDataService } from './tradingview-data.service.js';
+import { TradingViewExchangeResolverService } from './tradingview-exchange-resolver.service.js';
 import { CandleRepository } from '../../adapters/database/repositories/candle.repository.js';
 import { InstrumentRepository } from '../../adapters/database/repositories/instrument.repository.js';
 import { CandleInterval, MarketOutcome } from '../../types/market-data.types.js';
@@ -41,6 +42,7 @@ interface CandleOutput {
 export class UnifiedCandleService {
   private candleAggregator: CandleAggregator;
   private tradingViewData: TradingViewDataService;
+  private exchangeResolver: TradingViewExchangeResolverService;
   private candleRepo: CandleRepository;
   private instrumentRepo: InstrumentRepository;
   private inflightRequests: Map<string, Promise<CandleOutput[]>> = new Map();
@@ -52,6 +54,7 @@ export class UnifiedCandleService {
   constructor() {
     this.candleAggregator = new CandleAggregator();
     this.tradingViewData = new TradingViewDataService();
+    this.exchangeResolver = new TradingViewExchangeResolverService();
     this.candleRepo = new CandleRepository();
     this.instrumentRepo = new InstrumentRepository();
   }
@@ -173,12 +176,53 @@ export class UnifiedCandleService {
       throw new Error(`Instrument not found: ${instrumentId}`);
     }
 
+    // On-demand exchange resolution if not already resolved
+    let tvSymbol = instrument.tvSymbol;
+    if (!tvSymbol) {
+      this.logger.debug(
+        { instrumentId, symbol: instrument.symbol },
+        'TradingView symbol not cached, attempting on-demand resolution',
+      );
+
+      const resolution = await this.exchangeResolver.resolveSymbol(
+        instrument.symbol,
+        instrument.type,
+      );
+
+      if (resolution && resolution.confidence > 0.7) {
+        // Cache the resolved symbol in the database
+        await this.instrumentRepo.updateTvSymbol(
+          instrumentId,
+          resolution.tvSymbol,
+          resolution.exchange,
+        );
+        tvSymbol = resolution.tvSymbol;
+
+        this.logger.info(
+          {
+            instrumentId,
+            symbol: instrument.symbol,
+            tvSymbol: resolution.tvSymbol,
+            exchange: resolution.exchange,
+            confidence: resolution.confidence,
+          },
+          'On-demand resolution successful',
+        );
+      } else {
+        this.logger.warn(
+          { instrumentId, symbol: instrument.symbol },
+          'Failed to resolve TradingView symbol, using bare symbol',
+        );
+      }
+    }
+
     const tvCandles = await this.tradingViewData.fetchHistoricalCandles(
       instrumentId,
       instrument.symbol,
       interval,
       from,
       to,
+      tvSymbol,
     );
 
     // 4. Backfill cache with TradingView data

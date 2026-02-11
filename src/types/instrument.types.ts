@@ -1,5 +1,6 @@
 export enum InstrumentType {
   EQUITY = 'EQUITY',
+  ETF = 'ETF',
   OPTION = 'OPTION',
   FUTURE = 'FUTURE',
 }
@@ -26,6 +27,7 @@ export interface InstrumentRecord {
   symbol: string;
   name: string;
   exchange: string | null;
+  tvSymbol: string | null;
   lastPrice: string | null;
   bidPrice: string | null;
   askPrice: string | null;
@@ -58,6 +60,7 @@ export interface CreateInstrumentInput {
   symbol: string;
   name: string;
   exchange?: string;
+  tvSymbol?: string;
   lastPrice?: string;
   bidPrice?: string;
   askPrice?: string;

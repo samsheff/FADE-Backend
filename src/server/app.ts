@@ -140,31 +140,5 @@ export async function createApp(): Promise<FastifyInstance> {
     });
   });
 
-  // Health check endpoint
-  app.get(
-    '/health',
-    {
-      schema: {
-        tags: ['health'],
-        description: 'Health check endpoint',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              timestamp: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return {
-        status: 'ok',
-        timestamp: Date.now(),
-      };
-    },
-  );
-
   return app;
 }

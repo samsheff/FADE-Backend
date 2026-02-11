@@ -6,6 +6,7 @@ import { getCandlesRoutes } from './markets/get-candles.js';
 import { getPositionsRoutes } from './positions/get-positions.js';
 import { prepareTradeRoutes } from './trades/prepare-trade.js';
 import { backfillRoutes } from './admin/backfill.routes.js';
+import { exchangeResolutionRoutes } from './admin/exchange-resolution.routes.js';
 import { instrumentsRoutes } from './instruments/instruments.routes.js';
 import { signalsRoutes } from './signals/signals.routes.js';
 import { filingsRoutes } from './filings/filings.routes.js';
@@ -32,6 +33,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Admin routes
   await app.register(backfillRoutes, { prefix: '/api/v1/admin' });
+  await app.register(exchangeResolutionRoutes, { prefix: '/api/v1/admin/exchange-resolution' });
 
   // EDGAR routes
   await app.register(instrumentsRoutes, { prefix: '/api/v1/instruments' });

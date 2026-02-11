@@ -165,6 +165,7 @@ model AuthNonce {
 
 enum InstrumentType {
   EQUITY
+  ETF
   OPTION
   FUTURE
 }
@@ -185,6 +186,7 @@ model Instrument {
   symbol           String
   name             String
   exchange         String?
+  tvSymbol         String?          @map("tv_symbol")
 
   // Pricing (generic - not YES/NO)
   lastPrice        Decimal?         @map("last_price")

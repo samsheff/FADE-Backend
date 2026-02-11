@@ -48,30 +48,38 @@ export class TradingViewStreamService extends EventEmitter {
    * Subscribe to real-time price updates for a symbol
    *
    * @param instrumentId - Internal instrument ID
-   * @param symbol - TradingView symbol (e.g., 'NASDAQ:AAPL')
+   * @param symbol - Bare ticker symbol (e.g., 'AAPL')
    * @param callback - Called on each price update
+   * @param tvSymbol - Optional resolved TradingView symbol (e.g., 'NASDAQ:AAPL')
    * @returns Unsubscribe function
    */
   subscribeToSymbol(
     instrumentId: string,
     symbol: string,
     callback: PriceUpdateCallback,
+    tvSymbol?: string | null,
   ): () => void {
-    this.logger.info({ instrumentId, symbol }, 'Subscribing to TradingView stream');
+    // Use resolved TradingView symbol if available
+    const marketSymbol = tvSymbol || symbol;
+
+    this.logger.info(
+      { instrumentId, bareSymbol: symbol, marketSymbol, tvSymbol },
+      'Subscribing to TradingView stream',
+    );
 
     // Track subscription to avoid duplicates
     if (!this.subscriptions.has(instrumentId)) {
       this.subscriptions.set(instrumentId, new Set());
     }
-    this.subscriptions.get(instrumentId)!.add(symbol);
+    this.subscriptions.get(instrumentId)!.add(marketSymbol);
 
     // Register callback
     this.on(`price:${instrumentId}`, callback);
 
     // Start streaming if not already active for this symbol
-    if (!this.activeCharts.has(symbol)) {
-      this.startStreaming(instrumentId, symbol).catch((err) => {
-        this.logger.error({ err, instrumentId, symbol }, 'Failed to start TradingView stream');
+    if (!this.activeCharts.has(marketSymbol)) {
+      this.startStreaming(instrumentId, marketSymbol).catch((err) => {
+        this.logger.error({ err, instrumentId, marketSymbol }, 'Failed to start TradingView stream');
       });
     }
 
@@ -80,10 +88,10 @@ export class TradingViewStreamService extends EventEmitter {
       this.off(`price:${instrumentId}`, callback);
       const symbols = this.subscriptions.get(instrumentId);
       if (symbols) {
-        symbols.delete(symbol);
+        symbols.delete(marketSymbol);
         if (symbols.size === 0) {
           this.subscriptions.delete(instrumentId);
-          this.stopStreaming(symbol);
+          this.stopStreaming(marketSymbol);
           this.logger.info({ instrumentId }, 'Unsubscribed from all symbols for instrument');
         }
       }

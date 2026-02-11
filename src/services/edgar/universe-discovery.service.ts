@@ -6,6 +6,7 @@ import { InstrumentType } from '../../types/instrument.types.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
 import { getEnvironment } from '../../config/environment.js';
 import { SearchIndexerService } from '../search/search-indexer.service.js';
+import { EtfDetector } from '../../utils/etf-detector.js';
 
 interface SecCompanyTicker {
   cik_str: number;
@@ -246,9 +247,23 @@ export class EdgarUniverseDiscoveryService {
               updatedCount++;
             }
           } else {
+            // Detect if this is an ETF
+            const etfDetection = EtfDetector.detectEtf(symbol, name);
+            const instrumentType = etfDetection.isEtf && etfDetection.confidence > 0.7
+              ? InstrumentType.ETF
+              : InstrumentType.EQUITY;
+
+            // Log ETF detections for monitoring
+            if (etfDetection.isEtf && etfDetection.confidence > 0.7) {
+              this.logger.debug(
+                { symbol, name, confidence: etfDetection.confidence, reason: etfDetection.reason },
+                'ETF detected during universe discovery',
+              );
+            }
+
             // Create new issuer
             const instrument = await this.instrumentRepo.create({
-              type: InstrumentType.EQUITY,
+              type: instrumentType,
               symbol,
               name,
               exchange: null, // Will be populated later if trading data available

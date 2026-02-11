@@ -59,7 +59,7 @@ export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
         querystring: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['EQUITY', 'OPTION', 'FUTURE'] },
+            type: { type: 'string', enum: ['EQUITY', 'ETF', 'OPTION', 'FUTURE'] },
             status: { type: 'string', enum: ['ACTIVE', 'SUSPENDED', 'DELISTED', 'HALTED'] },
             symbol: { type: 'string' },
             exchange: { type: 'string' },

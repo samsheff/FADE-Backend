@@ -66,7 +66,7 @@ export class EdgarIndexerService {
     this.logger.info({ mode: 'REALTIME' }, 'Starting real-time RSS discovery');
 
     try {
-      const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K'];
+      const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K', 'N-CEN', 'N-PORT'];
       const allFilings: FilingMetadata[] = [];
 
       // Fetch recent filings (first page only, no pagination)
@@ -100,9 +100,14 @@ export class EdgarIndexerService {
       this.logger.info(
         {
           mode: 'REALTIME',
-          count: allFilings.length,
+          totalFilings: allFilings.length,
+          formTypeBreakdown: {
+            '8-K': allFilings.filter((f) => f.filingType === FilingType.FORM_8K).length,
+            'N-CEN': allFilings.filter((f) => f.filingType === FilingType.FORM_N_CEN).length,
+            'N-PORT': allFilings.filter((f) => f.filingType === FilingType.FORM_N_PORT).length,
+          },
         },
-        'Fetched recent filings from RSS',
+        'Discovery complete with ETF breakdown',
       );
 
       if (allFilings.length === 0) {
@@ -148,7 +153,7 @@ export class EdgarIndexerService {
     );
 
     try {
-      const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K'];
+      const formTypes = ['8-K', '424B5', 'S-3', 'S-3/A', '10-Q', '10-K', 'N-CEN', 'N-PORT'];
       const allFilings: FilingMetadata[] = [];
 
       // Fetch historical filings for each form type

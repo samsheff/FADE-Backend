@@ -165,6 +165,16 @@ export class FilingParserService {
         this.extractProspectusSections(text, sections);
         break;
 
+      case FilingType.FORM_N_CEN:
+        // Extract N-CEN sections (ETF annual report)
+        this.extractNCENSections(text, sections);
+        break;
+
+      case FilingType.FORM_N_PORT:
+        // Extract N-PORT sections (ETF quarterly holdings)
+        this.extractNPORTSections(text, sections);
+        break;
+
       default:
         // No specific sections for other types
         break;
@@ -224,6 +234,64 @@ export class FilingParserService {
       if (match) {
         sections[heading] = match[1].substring(0, 500).trim();
       }
+    }
+  }
+
+  /**
+   * Extract N-CEN sections (ETF annual report)
+   */
+  private extractNCENSections(
+    text: string,
+    sections: Record<string, string>,
+  ): void {
+    const headings = [
+      'Authorized Participants',
+      'Fund Structure',
+      'Management Fees',
+      'Total Annual Fund Operating Expenses',
+      'Shareholder Fees',
+      'Investment Objective',
+      'Principal Investment Strategies',
+    ];
+
+    for (const heading of headings) {
+      const pattern = new RegExp(heading + '([\\s\\S]{0,1000})', 'i');
+      const match = text.match(pattern);
+      if (match) {
+        sections[heading] = match[1].substring(0, 1000).trim();
+      }
+    }
+  }
+
+  /**
+   * Extract N-PORT sections (ETF quarterly holdings)
+   */
+  private extractNPORTSections(
+    text: string,
+    sections: Record<string, string>,
+  ): void {
+    const headings = [
+      'Schedule of Portfolio Holdings',
+      'Securities Lending',
+      'Derivative Instruments',
+      'Risk Metrics',
+      'Explanatory Notes',
+      'Percentage of Net Assets',
+    ];
+
+    for (const heading of headings) {
+      const pattern = new RegExp(heading + '([\\s\\S]{0,1000})', 'i');
+      const match = text.match(pattern);
+      if (match) {
+        sections[heading] = match[1].substring(0, 1000).trim();
+      }
+    }
+
+    // N-PORT is often XML-based, detect holdings
+    const xmlPattern = /<invstOrSec>[\s\S]*?<\/invstOrSec>/gi;
+    const xmlMatches = text.match(xmlPattern);
+    if (xmlMatches && xmlMatches.length > 0) {
+      sections['XML_Holdings_Count'] = `${xmlMatches.length} holdings found`;
     }
   }
 

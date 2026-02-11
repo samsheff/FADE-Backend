@@ -258,6 +258,12 @@ export class EdgarApiAdapter {
     if (normalized === 'DEF14A') {
       return FilingType.PROXY_DEF14A;
     }
+    if (normalized === 'N-CEN' || normalized.startsWith('N-CEN/')) {
+      return FilingType.FORM_N_CEN;
+    }
+    if (normalized === 'N-PORT' || normalized.startsWith('N-PORT/')) {
+      return FilingType.FORM_N_PORT;
+    }
 
     return FilingType.OTHER;
   }

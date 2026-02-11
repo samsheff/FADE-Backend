@@ -6,6 +6,8 @@ export enum FilingType {
   FORM_S3 = 'FORM_S3',
   ATM_FILING = 'ATM_FILING',
   PROXY_DEF14A = 'PROXY_DEF14A',
+  FORM_N_CEN = 'FORM_N_CEN',
+  FORM_N_PORT = 'FORM_N_PORT',
   OTHER = 'OTHER',
 }
 

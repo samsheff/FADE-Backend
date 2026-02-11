@@ -200,10 +200,10 @@ export class SearchService {
         },
       });
 
-      const hits = response.hits.hits;
-      const total = typeof response.hits.total === 'object'
-        ? response.hits.total.value
-        : response.hits.total;
+      const hits = response.body.hits.hits;
+      const total = typeof response.body.hits.total === 'object'
+        ? response.body.hits.total.value
+        : response.body.hits.total;
 
       let results: SearchResult[] = hits.map((hit: any) => {
         const source = hit._source as SearchDocument;

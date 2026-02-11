@@ -465,7 +465,7 @@ export class SearchIndexerService {
       doc,
     ]);
 
-    const result = await client.bulk({ operations });
+    const result = await client.bulk({ body: operations });
 
     if (result.errors) {
       const erroredItems = result.items.filter((item: any) => item.index?.error);

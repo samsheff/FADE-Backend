@@ -131,7 +131,6 @@ services:
       - NEWS_BACKFILL_ENABLED=${NEWS_BACKFILL_ENABLED:-true}
       - NEWS_BACKFILL_LOOKBACK_DAYS=${NEWS_BACKFILL_LOOKBACK_DAYS:-7}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-      - FINNHUB_API_BASE_URL=${FINNHUB_API_BASE_URL}
       - FINNHUB_API_RATE_LIMIT_MS=${FINNHUB_API_RATE_LIMIT_MS:-1000}
     networks:
       - terminal-workers
@@ -209,7 +208,7 @@ services:
 
   # Watchtower - Auto-update containers when new images are pushed
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
     volumes:
@@ -219,6 +218,7 @@ services:
       - WATCHTOWER_CLEANUP=true       # Remove old images
       - WATCHTOWER_INCLUDE_STOPPED=false
       - WATCHTOWER_LABEL_ENABLE=false
+      - DOCKER_API_VERSION=1.44       # Match Docker daemon version
     networks:
       - terminal-workers
     logging:

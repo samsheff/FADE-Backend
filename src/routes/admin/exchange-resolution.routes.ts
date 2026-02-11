@@ -6,9 +6,6 @@
 
 import { FastifyInstance } from 'fastify';
 import { TradingViewExchangeResolutionJob } from '../../jobs/tradingview-exchange-resolution.job.js';
-import { getLogger } from '../../utils/logger.js';
-
-const logger = getLogger();
 
 export async function exchangeResolutionRoutes(app: FastifyInstance) {
   const resolutionJob = new TradingViewExchangeResolutionJob();
@@ -20,7 +17,7 @@ export async function exchangeResolutionRoutes(app: FastifyInstance) {
    */
   app.post('/run-batch', async (request, reply) => {
     try {
-      logger.info('Manual batch resolution triggered');
+      request.log.info('Manual batch resolution triggered');
 
       const result = await resolutionJob.runBatch();
 
@@ -30,7 +27,7 @@ export async function exchangeResolutionRoutes(app: FastifyInstance) {
         ...result,
       });
     } catch (error) {
-      logger.error({ error }, 'Batch resolution failed');
+      request.log.error({ error }, 'Batch resolution failed');
 
       return reply.status(500).send({
         success: false,
@@ -52,7 +49,7 @@ export async function exchangeResolutionRoutes(app: FastifyInstance) {
         ? parseInt(request.query.maxBatches, 10)
         : 10;
 
-      logger.info({ maxBatches }, 'Manual continuous resolution triggered');
+      request.log.info({ maxBatches }, 'Manual continuous resolution triggered');
 
       const result = await resolutionJob.runContinuous(maxBatches);
 
@@ -62,7 +59,7 @@ export async function exchangeResolutionRoutes(app: FastifyInstance) {
         ...result,
       });
     } catch (error) {
-      logger.error({ error }, 'Continuous resolution failed');
+      request.log.error({ error }, 'Continuous resolution failed');
 
       return reply.status(500).send({
         success: false,
@@ -91,7 +88,7 @@ export async function exchangeResolutionRoutes(app: FastifyInstance) {
         },
       });
     } catch (error) {
-      logger.error({ error }, 'Failed to fetch resolution stats');
+      request.log.error({ error }, 'Failed to fetch resolution stats');
 
       return reply.status(500).send({
         success: false,

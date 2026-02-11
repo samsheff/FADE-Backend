@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { SearchService } from '../../services/search/search.service.js';
-import { getLogger } from '../../utils/logger.js';
 
 let searchService: SearchService | null = null;
 
@@ -81,8 +80,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
         return reply.send({ results });
       } catch (error) {
-        const logger = getLogger();
-        logger.error({ error }, 'Autocomplete search failed');
+        request.log.error({ error }, 'Autocomplete search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',
@@ -152,8 +150,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
         return reply.send({ results, total });
       } catch (error) {
-        const logger = getLogger();
-        logger.error({ error }, 'Full search failed');
+        request.log.error({ error }, 'Full search failed');
         return reply.status(500).send({
           error: 'Search failed',
           message: 'An error occurred while searching',

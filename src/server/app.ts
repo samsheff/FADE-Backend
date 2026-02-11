@@ -32,7 +32,7 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // CORS plugin
   await app.register(cors, {
-    origin: env.NODE_ENV === 'production' ? false : true,
+    origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(','),
     credentials: true,
   });
 

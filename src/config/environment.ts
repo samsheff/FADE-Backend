@@ -71,6 +71,7 @@ const envSchema = z.object({
 
   // Security
   NONCE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(300000),
+  CORS_ORIGIN: z.string().default('*'),
 
   // Caching
   MARKET_CACHE_TTL_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(60000),

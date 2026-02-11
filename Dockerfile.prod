@@ -21,8 +21,17 @@ COPY . .
 # Generate Prisma client
 RUN pnpm db:generate
 
-# Build TypeScript (skip lib checks and ignore errors for now)
-RUN tsc --skipLibCheck || echo "Type errors ignored, build continuing..."
+# Create lenient tsconfig for production build
+RUN echo '{ \
+  "extends": "./tsconfig.json", \
+  "compilerOptions": { \
+    "skipLibCheck": true, \
+    "noEmitOnError": false \
+  } \
+}' > tsconfig.prod.json
+
+# Build TypeScript with lenient config
+RUN pnpm tsc --project tsconfig.prod.json || pnpm tsc --skipLibCheck --noEmitOnError false
 
 # Stage 2: Production runtime
 FROM node:22-alpine

@@ -47,12 +47,14 @@ COPY package.json pnpm-lock.yaml ./
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
+# Copy Prisma schema (needed for client generation)
+COPY prisma ./prisma
+
+# Generate Prisma client (npx temporarily downloads prisma CLI v6.19.2)
+RUN npx prisma@6.19.2 generate
+
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# Copy Prisma schema (needed for migrations)
-COPY prisma ./prisma
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \

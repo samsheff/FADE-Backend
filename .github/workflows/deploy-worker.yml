@@ -1,0 +1,70 @@
+name: Build and Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com/fade
+  IMAGE_NAME: terminal-worker
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DigitalOcean Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      - name: Build and push worker image
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile.prod -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_SHA}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_SHA}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to worker droplet
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          REGISTRY_URL: ${{ env.REGISTRY }}
+        with:
+          host: ${{ secrets.WORKER_DROPLET_IP }}
+          username: root
+          key: ${{ secrets.WORKER_SSH_KEY }}
+          envs: REGISTRY_URL
+          script: |
+            cd /opt/terminal-workers
+
+            # Download docker-compose file if not present
+            if [ ! -f docker-compose.yml ]; then
+              curl -sL https://raw.githubusercontent.com/samsheff/terminal/main/docker-compose.workers.yml -o docker-compose.yml
+            fi
+
+            # Set registry in .env if needed
+            if ! grep -q "DOCKER_REGISTRY=" .env; then
+              echo "DOCKER_REGISTRY=${REGISTRY_URL}" >> .env
+            fi
+
+            # Pull latest images and restart
+            docker compose pull
+            docker compose up -d
+
+            # Show status
+            docker compose ps

@@ -177,3 +177,95 @@ export interface FactorPrice {
   /** Last updated timestamp */
   timestamp: Date;
 }
+
+/**
+ * Evidence: Persistent premium/discount in ETF
+ */
+export interface PersistentDeviationEvidence extends EvidenceFact {
+  type: 'PERSISTENT_DEVIATION';
+
+  /** Deviation percentage from NAV */
+  deviationPct: number;
+
+  /** Number of consecutive days with deviation */
+  consecutiveDays: number;
+
+  /** Direction of deviation (PREMIUM | DISCOUNT) */
+  direction: 'PREMIUM' | 'DISCOUNT';
+}
+
+/**
+ * Evidence: Extreme deviation from historical mean
+ */
+export interface ExtremeDeviationEvidence extends EvidenceFact {
+  type: 'EXTREME_DEVIATION';
+
+  /** Current deviation percentage */
+  deviationPct: number;
+
+  /** Z-score (standard deviations from mean) */
+  zScore: number;
+
+  /** 60-day mean premium/discount */
+  mean60Day: number;
+
+  /** 60-day standard deviation */
+  stdDev60Day: number;
+}
+
+/**
+ * Evidence: High AP concentration
+ */
+export interface ApConcentrationEvidence extends EvidenceFact {
+  type: 'AP_CONCENTRATION';
+
+  /** Top-3 AP market share (0-100) */
+  topThreeApShare: number;
+
+  /** Herfindahl-Hirschman Index */
+  hhi: number;
+
+  /** Total active AP count */
+  activeApCount: number;
+
+  /** Source filing ID */
+  filingId: string;
+
+  /** As-of date from filing */
+  asOfDate: Date;
+}
+
+/**
+ * Evidence: Declining AP count
+ */
+export interface ApCountDeclineEvidence extends EvidenceFact {
+  type: 'AP_COUNT_DECLINE';
+
+  /** Current AP count */
+  currentApCount: number;
+
+  /** Prior AP count */
+  priorApCount: number;
+
+  /** Decline rate (percentage) */
+  declineRate: number;
+
+  /** Number of filings showing decline */
+  filingCount: number;
+}
+
+/**
+ * Evidence: One-way creation/redemption flow
+ */
+export interface OneWayFlowEvidence extends EvidenceFact {
+  type: 'ONE_WAY_FLOW';
+
+  /** Flow direction (CREATION | REDEMPTION) */
+  direction: 'CREATION' | 'REDEMPTION';
+
+  /** Total flow units */
+  totalFlowUnits: number;
+
+  /** Number of consecutive periods */
+  consecutivePeriods: number;
+}

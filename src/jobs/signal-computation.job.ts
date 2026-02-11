@@ -11,9 +11,14 @@ import { FactorPriceService } from '../services/signals/adapters/factor-price.se
 import { CompetitorImpactGenerator } from '../services/signals/generators/competitor-impact.generator.js';
 import { FactorCorrelationGenerator } from '../services/signals/generators/factor-correlation.generator.js';
 import { CrossEntityPropagationGenerator } from '../services/signals/generators/cross-entity-propagation.generator.js';
+import { ArbitrageBreakdownGenerator } from '../services/signals/generators/etf-arbitrage-breakdown.generator.js';
+import { APFragilityGenerator } from '../services/signals/generators/etf-ap-fragility.generator.js';
 import { MarketRepository } from '../adapters/database/repositories/market.repository.js';
 import { InstrumentRepository } from '../adapters/database/repositories/instrument.repository.js';
 import { SignalRepository } from '../adapters/database/repositories/signal.repository.js';
+import { EtfNavDataService } from '../services/etf/etf-nav-data.service.js';
+import { EtfMetricsRepository } from '../adapters/database/repositories/etf-metrics.repository.js';
+import { getPrismaClient } from '../adapters/database/client.js';
 import { env } from '../config/environment.js';
 import { logger } from '../utils/logger.js';
 
@@ -38,13 +43,16 @@ export class SignalComputationJob {
 
   constructor() {
     // Instantiate repositories
+    const prisma = getPrismaClient();
     const marketRepo = new MarketRepository();
     const instrumentRepo = new InstrumentRepository();
     const signalRepo = new SignalRepository();
+    const etfMetricsRepo = new EtfMetricsRepository(prisma);
 
     // Instantiate services
     const priceTracker = new PriceTrackerService(marketRepo, instrumentRepo);
     const factorPrices = new FactorPriceService();
+    const etfNavService = new EtfNavDataService(prisma);
 
     // Instantiate computation service
     this.service = new SignalComputationService(
@@ -62,6 +70,12 @@ export class SignalComputationJob {
     );
     this.service.registerGenerator(
       new CrossEntityPropagationGenerator(instrumentRepo, signalRepo)
+    );
+    this.service.registerGenerator(
+      new ArbitrageBreakdownGenerator(instrumentRepo, etfNavService)
+    );
+    this.service.registerGenerator(
+      new APFragilityGenerator(instrumentRepo, etfMetricsRepo)
     );
 
     logger.info('Signal computation job initialized', {

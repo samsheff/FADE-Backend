@@ -327,6 +327,28 @@ const envSchema = z.object({
     .default(100),
 
   // ============================================================================
+  // ETF Metrics Enrichment Configuration
+  // ============================================================================
+
+  ETF_METRICS_ENRICHMENT_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default(true),
+
+  ETF_METRICS_ENRICHMENT_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(86400000), // 24 hours (daily)
+
+  ETF_METRICS_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(10),
+
+  // ============================================================================
   // Signal Computation Configuration
   // ============================================================================
 

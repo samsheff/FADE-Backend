@@ -113,6 +113,18 @@ export class InstrumentRepository {
     };
   }
 
+  async findByType(type: string): Promise<InstrumentRecord[]> {
+    const instruments = await this.prisma.instrument.findMany({
+      where: { type: type as any },
+      include: {
+        identifiers: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return instruments.map((i) => this.toModel(i));
+  }
+
   async create(input: CreateInstrumentInput): Promise<InstrumentRecord> {
     const created = await this.prisma.instrument.create({
       data: {

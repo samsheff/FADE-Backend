@@ -221,6 +221,8 @@ model Instrument {
   competitorOf     CompetitorRelationship[] @relation("Competitor")
   factorExposures  FactorExposure[]
   documents        DocumentInstrument[]
+  etfMetrics       EtfMetrics[]
+  apDetails        EtfApDetail[]
 
   @@unique([type, symbol, exchange])
   @@index([status])
@@ -309,6 +311,8 @@ model Filing {
   parsedContent   FilingContent?
   facts           FilingFact[]
   signals         InstrumentSignal[]
+  etfMetrics      EtfMetrics[]
+  apDetails       EtfApDetail[]
 
   @@index([cik, filingDate])
   @@index([status])
@@ -382,6 +386,12 @@ enum FactType {
   FDA_REJECTION
   FDA_APPROVAL
   SAFETY_NOTICE
+
+  // ETF-specific facts
+  ETF_NAV_DISCLOSED
+  ETF_PREMIUM_DISCOUNT_REPORTED
+  ETF_AP_LIST
+  ETF_CREATION_REDEMPTION_ACTIVITY
 }
 
 model FilingFact {
@@ -440,6 +450,17 @@ enum SignalType {
   // Peer/Factor signals
   PEER_IMPACT
   FACTOR_EXPOSURE_ALERT
+
+  // ETF Arbitrage Breakdown signals
+  ETF_ARB_STRESS_PERSISTENT_DISCOUNT
+  ETF_ARB_STRESS_PERSISTENT_PREMIUM
+  ETF_ARB_STRESS_EXTREME_DEVIATION
+  ETF_ARB_IMPAIRED_ARBITRAGE_CHANNEL
+
+  // ETF AP Fragility signals
+  ETF_AP_CONCENTRATION_HIGH
+  ETF_AP_COUNT_DECLINING
+  ETF_CREATION_REDEMPTION_ONE_WAY_BURST
 }
 
 enum SignalSeverity {
@@ -471,6 +492,61 @@ model InstrumentSignal {
   @@index([severity])
   @@index([computedAt])
   @@map("instrument_signals")
+}
+
+// ============================================================================
+// ETF METRICS & AP TRACKING
+// ============================================================================
+
+model EtfMetrics {
+  id           String   @id @default(uuid())
+  instrumentId String   @map("instrument_id")
+
+  // Pricing metrics
+  nav          Decimal? // Net Asset Value per share
+  marketPrice  Decimal? @map("market_price")
+  premium      Decimal? // (marketPrice - NAV) / NAV * 100
+
+  // AP metrics (from N-CEN)
+  activeApCount     Int?     @map("active_ap_count")
+  topThreeApShare   Decimal? @map("top_three_ap_share")
+  hhi               Decimal? // Herfindahl-Hirschman Index
+
+  // Creation/redemption flows
+  creationUnits     Decimal? @map("creation_units")
+  redemptionUnits   Decimal? @map("redemption_units")
+  netFlowUnits      Decimal? @map("net_flow_units")
+
+  asOfDate     DateTime @map("as_of_date")
+  sourceType   String   @map("source_type") // 'N-CEN', 'N-PORT', 'CALCULATED'
+  filingId     String?  @map("filing_id")
+  createdAt    DateTime @default(now())
+
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  filing       Filing?    @relation(fields: [filingId], references: [id], onDelete: SetNull)
+
+  @@unique([instrumentId, asOfDate, sourceType])
+  @@index([instrumentId, asOfDate])
+  @@map("etf_metrics")
+}
+
+model EtfApDetail {
+  id              String   @id @default(uuid())
+  instrumentId    String   @map("instrument_id")
+  filingId        String   @map("filing_id")
+  apName          String   @map("ap_name")
+  apIdentifier    String?  @map("ap_identifier")
+  shareOfActivity Decimal? @map("share_of_activity")
+  isActive        Boolean  @default(true)
+  asOfDate        DateTime @map("as_of_date")
+  createdAt       DateTime @default(now())
+
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  filing       Filing     @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, filingId, apName])
+  @@index([instrumentId, asOfDate])
+  @@map("etf_ap_details")
 }
 
 // ============================================================================

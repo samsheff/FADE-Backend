@@ -11,6 +11,8 @@ services:
     container_name: worker-market-sync
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/market-sync-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -35,6 +37,8 @@ services:
     container_name: worker-position-update
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/position-update-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -55,6 +59,8 @@ services:
     container_name: worker-edgar-universe
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/edgar-universe-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -76,6 +82,8 @@ services:
     container_name: worker-edgar-sync
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/edgar-sync-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -106,6 +114,8 @@ services:
     container_name: worker-news
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/news-worker-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -137,6 +147,8 @@ services:
     container_name: worker-entity-enrichment
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/entity-enrichment-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -156,6 +168,8 @@ services:
     container_name: worker-signal-computation
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/signal-computation-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}
@@ -177,6 +191,8 @@ services:
     container_name: worker-search-indexer
     restart: unless-stopped
     command: ["node", "dist/jobs/runners/search-indexer-runner.js"]
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=${DATABASE_URL}

@@ -305,6 +305,84 @@ const envSchema = z.object({
     .default(0.7),
 
   // ============================================================================
+  // Transcripts Worker Configuration
+  // ============================================================================
+
+  TRANSCRIPTS_WORKER_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default(false),
+
+  TRANSCRIPTS_SYNC_INTERVAL_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(14400000), // 4 hours
+
+  TRANSCRIPTS_STORAGE_PATH: z
+    .string()
+    .default('./storage/transcripts'),
+
+  // S3 Storage Configuration for Transcripts
+  TRANSCRIPTS_STORAGE_TYPE: z
+    .enum(['local', 's3'])
+    .default('local'),
+
+  TRANSCRIPTS_S3_BUCKET: optionalString,
+  TRANSCRIPTS_S3_ENDPOINT: optionalUrl,
+  TRANSCRIPTS_S3_REGION: optionalString,
+  TRANSCRIPTS_S3_ACCESS_KEY: optionalString,
+  TRANSCRIPTS_S3_SECRET_KEY: optionalString,
+
+  TRANSCRIPTS_BATCH_SIZE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(10),
+
+  TRANSCRIPTS_BACKFILL_ENABLED: z
+    .string()
+    .transform((val) => val === 'true')
+    .pipe(z.boolean())
+    .default(true),
+
+  TRANSCRIPTS_BACKFILL_LOOKBACK_DAYS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(180), // 6 months of historical transcripts
+
+  // FMP API Configuration
+  FMP_API_KEY: z
+    .string()
+    .default(''),
+
+  FMP_API_BASE_URL: z
+    .string()
+    .url()
+    .default('https://financialmodelingprep.com/api'),
+
+  FMP_API_RATE_LIMIT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default(350), // ~3 req/sec
+
+  // Signal extraction thresholds
+  SIGNAL_TRANSCRIPT_MIN_CONFIDENCE: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default(0.6),
+
+  SIGNAL_TRANSCRIPT_MIN_KEYWORD_DENSITY: z
+    .string()
+    .transform(Number)
+    .pipe(z.number())
+    .default(2.0), // matches per 1000 words
+
+  // ============================================================================
   // Entity Enrichment Configuration
   // ============================================================================
 

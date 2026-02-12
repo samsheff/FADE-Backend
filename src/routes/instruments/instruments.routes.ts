@@ -4,6 +4,13 @@ import { UnifiedCandleService } from '../../services/market-data/unified-candle.
 import { CandleInterval } from '../../types/market-data.types.js';
 import { ValidationError } from '../../utils/errors.js';
 import { PrismaClient } from '@prisma/client';
+import type {
+  InstrumentConnectionsResponse,
+  ConnectionClassification,
+  ConnectionCompetitor,
+  ConnectionFactorExposure,
+  FactorType,
+} from '../../types/document.types.js';
 
 const prisma = new PrismaClient();
 
@@ -293,6 +300,131 @@ export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
           },
         })),
       };
+    },
+  );
+
+  // New route: Get connections (classification, competitors, factor exposures) for instrument
+  app.get<{
+    Params: { id: string };
+  }>(
+    '/:id/connections',
+    {
+      schema: {
+        tags: ['instruments'],
+        description: 'Get connections (industry, competitors, factors) for instrument',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Instrument ID' },
+          },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const { id } = request.params;
+
+      // Helper to format factor enum to human-readable name
+      const formatFactorName = (factorType: string): string => {
+        const mapping: Record<string, string> = {
+          COMMODITY_GOLD: 'Gold',
+          COMMODITY_SILVER: 'Silver',
+          COMMODITY_OIL: 'Oil',
+          COMMODITY_NATURAL_GAS: 'Natural Gas',
+          COMMODITY_COPPER: 'Copper',
+          INTEREST_RATE_10Y: '10-Year Treasury',
+          INTEREST_RATE_FED_FUNDS: 'Fed Funds Rate',
+          INDEX_SPX: 'S&P 500',
+          INDEX_NASDAQ: 'NASDAQ',
+          CURRENCY_USD: 'US Dollar',
+          VOLATILITY_VIX: 'VIX',
+        };
+        return mapping[factorType] || factorType;
+      };
+
+      // Query classification (single record, most recent)
+      const classificationRecord = await prisma.instrumentClassification.findFirst({
+        where: { instrumentId: id },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      let classification: ConnectionClassification | null = null;
+      if (classificationRecord) {
+        classification = {
+          sector: classificationRecord.sector,
+          industry: classificationRecord.industry,
+          confidence: Number(classificationRecord.confidence),
+          classifiedAt: classificationRecord.classifiedAt.toISOString(),
+        };
+      }
+
+      // Query competitors (with include to avoid N+1)
+      const competitorRecords = await prisma.competitorRelationship.findMany({
+        where: { instrumentId: id },
+        include: {
+          competitor: {
+            select: {
+              id: true,
+              name: true,
+              symbol: true,
+            },
+          },
+        },
+        orderBy: { confidence: 'desc' },
+        take: 15,
+      });
+
+      const competitors: ConnectionCompetitor[] = competitorRecords.map((record) => ({
+        instrumentId: record.competitor.id,
+        name: record.competitor.name,
+        symbol: record.competitor.symbol,
+        relationshipType: record.relationshipType,
+        confidence: Number(record.confidence),
+        discoveredAt: record.discoveredAt.toISOString(),
+      }));
+
+      // Query factor exposures
+      const factorRecords = await prisma.factorExposure.findMany({
+        where: { instrumentId: id },
+      });
+
+      // Rank by confidence × magnitude
+      const rankedFactors = factorRecords
+        .map((record) => ({
+          record,
+          rankScore: Number(record.confidence) * Number(record.magnitude),
+        }))
+        .sort((a, b) => b.rankScore - a.rankScore)
+        .slice(0, 15);
+
+      const factorExposures: ConnectionFactorExposure[] = rankedFactors.map(({ record }) => ({
+        factorType: record.factorType,
+        factorName: formatFactorName(record.factorType),
+        direction: record.direction,
+        magnitude: Number(record.magnitude),
+        confidence: Number(record.confidence),
+        discoveredAt: record.discoveredAt.toISOString(),
+      }));
+
+      // Metadata
+      const lastUpdated =
+        classificationRecord?.updatedAt ||
+        competitorRecords[0]?.updatedAt ||
+        factorRecords[0]?.updatedAt ||
+        new Date();
+
+      const response: InstrumentConnectionsResponse = {
+        classification,
+        competitors,
+        factorExposures,
+        metadata: {
+          totalCompetitors: competitors.length,
+          totalFactorExposures: factorExposures.length,
+          lastUpdated: lastUpdated.toISOString(),
+        },
+      };
+
+      return response;
     },
   );
 }

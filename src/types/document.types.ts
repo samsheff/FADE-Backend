@@ -263,3 +263,45 @@ export interface InstrumentWithClassification {
   competitors: CompetitorRelationshipRecord[];
   factorExposures: FactorExposureRecord[];
 }
+
+// ============================================================================
+// CONNECTIONS API RESPONSE TYPES
+// ============================================================================
+
+export interface ConnectionClassification {
+  sector: string;
+  industry: string;
+  confidence: number;
+  classifiedAt: string;
+}
+
+export interface ConnectionCompetitor {
+  instrumentId: string;
+  name: string;
+  symbol: string;
+  relationshipType: string;
+  confidence: number;
+  discoveredAt: string;
+}
+
+export interface ConnectionFactorExposure {
+  factorType: string;
+  factorName: string;
+  direction: string;
+  magnitude: number;
+  confidence: number;
+  discoveredAt: string;
+}
+
+export interface ConnectionMetadata {
+  totalCompetitors: number;
+  totalFactorExposures: number;
+  lastUpdated: string;
+}
+
+export interface InstrumentConnectionsResponse {
+  classification: ConnectionClassification | null;
+  competitors: ConnectionCompetitor[];
+  factorExposures: ConnectionFactorExposure[];
+  metadata: ConnectionMetadata;
+}

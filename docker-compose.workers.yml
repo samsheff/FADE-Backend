@@ -13,16 +13,6 @@ services:
     command: ["node", "dist/jobs/runners/market-sync-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
-      - POLYMARKET_CLOB_API_URL=${POLYMARKET_CLOB_API_URL}
-      - POLYMARKET_CLOB_WS_URL=${POLYMARKET_CLOB_WS_URL}
-      - POLYMARKET_GAMMA_API_URL=${POLYMARKET_GAMMA_API_URL}
-      - POLYMARKET_DATA_API_URL=${POLYMARKET_DATA_API_URL}
-      - MARKET_SYNC_INTERVAL_MS=${MARKET_SYNC_INTERVAL_MS:-60000}
     networks:
       - terminal-workers
     logging:
@@ -39,12 +29,6 @@ services:
     command: ["node", "dist/jobs/runners/position-update-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
-      - POLYMARKET_CLOB_API_URL=${POLYMARKET_CLOB_API_URL}
-      - POSITION_UPDATE_INTERVAL_MS=${POSITION_UPDATE_INTERVAL_MS:-300000}
     networks:
       - terminal-workers
     logging:
@@ -61,13 +45,6 @@ services:
     command: ["node", "dist/jobs/runners/edgar-universe-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - EDGAR_WORKER_ENABLED=${EDGAR_WORKER_ENABLED:-true}
-      - EDGAR_UNIVERSE_SYNC_INTERVAL_MS=${EDGAR_UNIVERSE_SYNC_INTERVAL_MS:-86400000}
-      - EDGAR_API_USER_AGENT=${EDGAR_API_USER_AGENT}
-      - EDGAR_API_RATE_LIMIT_MS=${EDGAR_API_RATE_LIMIT_MS:-100}
     networks:
       - terminal-workers
     logging:
@@ -84,22 +61,6 @@ services:
     command: ["node", "dist/jobs/runners/edgar-sync-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - EDGAR_WORKER_ENABLED=${EDGAR_WORKER_ENABLED:-true}
-      - EDGAR_SYNC_INTERVAL_MS=${EDGAR_SYNC_INTERVAL_MS:-3600000}
-      - EDGAR_STORAGE_TYPE=${EDGAR_STORAGE_TYPE:-s3}
-      - EDGAR_S3_BUCKET=${EDGAR_S3_BUCKET}
-      - EDGAR_S3_ENDPOINT=${EDGAR_S3_ENDPOINT}
-      - EDGAR_S3_REGION=${EDGAR_S3_REGION:-us-east-1}
-      - EDGAR_S3_ACCESS_KEY=${EDGAR_S3_ACCESS_KEY}
-      - EDGAR_S3_SECRET_KEY=${EDGAR_S3_SECRET_KEY}
-      - EDGAR_API_USER_AGENT=${EDGAR_API_USER_AGENT}
-      - EDGAR_API_RATE_LIMIT_MS=${EDGAR_API_RATE_LIMIT_MS:-100}
-      - EDGAR_BATCH_SIZE=${EDGAR_BATCH_SIZE:-10}
-      - EDGAR_BACKFILL_ENABLED=${EDGAR_BACKFILL_ENABLED:-true}
-      - EDGAR_BACKFILL_LOOKBACK_DAYS=${EDGAR_BACKFILL_LOOKBACK_DAYS:-90}
     networks:
       - terminal-workers
     logging:
@@ -116,22 +77,6 @@ services:
     command: ["node", "dist/jobs/runners/news-worker-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - NEWS_WORKER_ENABLED=${NEWS_WORKER_ENABLED:-true}
-      - NEWS_SYNC_INTERVAL_MS=${NEWS_SYNC_INTERVAL_MS:-3600000}
-      - NEWS_STORAGE_TYPE=${NEWS_STORAGE_TYPE:-s3}
-      - NEWS_S3_BUCKET=${NEWS_S3_BUCKET}
-      - NEWS_S3_ENDPOINT=${NEWS_S3_ENDPOINT}
-      - NEWS_S3_REGION=${NEWS_S3_REGION:-us-east-1}
-      - NEWS_S3_ACCESS_KEY=${NEWS_S3_ACCESS_KEY}
-      - NEWS_S3_SECRET_KEY=${NEWS_S3_SECRET_KEY}
-      - NEWS_BATCH_SIZE=${NEWS_BATCH_SIZE:-20}
-      - NEWS_BACKFILL_ENABLED=${NEWS_BACKFILL_ENABLED:-true}
-      - NEWS_BACKFILL_LOOKBACK_DAYS=${NEWS_BACKFILL_LOOKBACK_DAYS:-7}
-      - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-      - FINNHUB_API_RATE_LIMIT_MS=${FINNHUB_API_RATE_LIMIT_MS:-1000}
     networks:
       - terminal-workers
     logging:
@@ -139,6 +84,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  
 
   # Transcripts Worker - Ingests and analyzes earnings call transcripts
   transcripts-worker:
@@ -149,12 +96,9 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - TRANSCRIPTS_WORKER_ENABLED=${TRANSCRIPTS_WORKER_ENABLED:-true}
       - TRANSCRIPTS_SYNC_INTERVAL_MS=${TRANSCRIPTS_SYNC_INTERVAL_MS:-14400000}
       - TRANSCRIPTS_BATCH_SIZE=${TRANSCRIPTS_BATCH_SIZE:-10}
-      - TRANSCRIPTS_BACKFILL_ENABLED=${TRANSCRIPTS_BACKFILL_ENABLED:-true}
+      - TRANSCRIPTS_BACKFILL_ENABLED=${TRANSCRIPTS_BACKFILL_ENABLED:-false}
       - TRANSCRIPTS_BACKFILL_LOOKBACK_DAYS=${TRANSCRIPTS_BACKFILL_LOOKBACK_DAYS:-180}
       - TRANSCRIPTS_STORAGE_TYPE=${TRANSCRIPTS_STORAGE_TYPE:-local}
       - TRANSCRIPTS_STORAGE_PATH=${TRANSCRIPTS_STORAGE_PATH:-./storage/transcripts}
@@ -164,11 +108,7 @@ services:
       - TRANSCRIPTS_S3_ACCESS_KEY=${TRANSCRIPTS_S3_ACCESS_KEY}
       - TRANSCRIPTS_S3_SECRET_KEY=${TRANSCRIPTS_S3_SECRET_KEY}
       - FMP_API_KEY=${FMP_API_KEY}
-      - FMP_API_BASE_URL=${FMP_API_BASE_URL:-https://financialmodelingprep.com/api}
       - FMP_API_RATE_LIMIT_MS=${FMP_API_RATE_LIMIT_MS:-350}
-      - SIGNAL_TRANSCRIPT_MIN_CONFIDENCE=${SIGNAL_TRANSCRIPT_MIN_CONFIDENCE:-0.6}
-      - SIGNAL_TRANSCRIPT_MIN_KEYWORD_DENSITY=${SIGNAL_TRANSCRIPT_MIN_KEYWORD_DENSITY:-2.0}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - ./storage/transcripts:/app/storage/transcripts
     networks:
@@ -187,11 +127,6 @@ services:
     command: ["node", "dist/jobs/runners/entity-enrichment-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - ENTITY_ENRICHMENT_ENABLED=${ENTITY_ENRICHMENT_ENABLED:-true}
-      - ENTITY_ENRICHMENT_INTERVAL_MS=${ENTITY_ENRICHMENT_INTERVAL_MS:-604800000}
     networks:
       - terminal-workers
     logging:
@@ -208,13 +143,6 @@ services:
     command: ["node", "dist/jobs/runners/signal-computation-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - SIGNAL_COMPUTATION_ENABLED=${SIGNAL_COMPUTATION_ENABLED:-true}
-      - SIGNAL_DILUTION_SHELF_THRESHOLD_PCT=${SIGNAL_DILUTION_SHELF_THRESHOLD_PCT:-20}
-      - SIGNAL_TOXIC_PRICE_THRESHOLD=${SIGNAL_TOXIC_PRICE_THRESHOLD:-2}
-      - SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS=${SIGNAL_REVERSE_SPLIT_LOOKBACK_MONTHS:-12}
     networks:
       - terminal-workers
     logging:
@@ -231,12 +159,6 @@ services:
     command: ["node", "dist/jobs/runners/search-indexer-runner.js"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
-      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
-      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
-      - SEARCH_INDEXER_ENABLED=${SEARCH_INDEXER_ENABLED:-true}
     networks:
       - terminal-workers
     logging:

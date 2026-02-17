@@ -4,7 +4,7 @@ import { FilingRepository } from '../../adapters/database/repositories/filing.re
 import { InstrumentRepository } from '../../adapters/database/repositories/instrument.repository.js';
 import { getEnvironment } from '../../config/environment.js';
 import { getLogger } from '../../utils/logger.js';
-import { FilingMetadata } from '../../types/edgar.types.js';
+import { FilingMetadata, FilingType } from '../../types/edgar.types.js';
 import { InstrumentType } from '../../types/instrument.types.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
 
@@ -91,7 +91,7 @@ export class EdgarIndexerService {
           );
         } catch (error) {
           this.logger.warn(
-            { mode: 'REALTIME', formType, error },
+            { mode: 'REALTIME', formType, err: error },
             'Failed to fetch recent filings for form type',
           );
         }
@@ -117,7 +117,7 @@ export class EdgarIndexerService {
       // Insert discovered filings (shared logic)
       return await this.insertDiscoveredFilings(allFilings);
     } catch (error) {
-      this.logger.error({ error, mode: 'REALTIME' }, 'Real-time discovery failed');
+      this.logger.error({ err: error, mode: 'REALTIME' }, 'Real-time discovery failed');
       throw error;
     }
   }

@@ -3,7 +3,7 @@ name: Build and Deploy Worker
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 env:
@@ -53,7 +53,7 @@ jobs:
             cd /opt/terminal-workers
 
             # Always download latest docker-compose file
-            curl -fsSL https://raw.githubusercontent.com/samsheff/terminal/main/back/docker-compose.workers.yml -o docker-compose.yml
+            curl -fsSL https://raw.githubusercontent.com/samsheff/terminal/master/back/docker-compose.workers.yml -o docker-compose.yml
 
             # Set registry in .env if needed
             if ! grep -q "DOCKER_REGISTRY=" .env; then

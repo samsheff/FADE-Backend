@@ -133,6 +133,7 @@ export class EdgarRssAdapter {
     let entryCount = 0;
 
     while ((entryMatch = entryPattern.exec(xmlText)) !== null) {
+      entryCount++;
       const entry = entryMatch[1];
 
       try {
